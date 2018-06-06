@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -81,28 +82,42 @@ namespace Sudoku_solver
         /// <summary>
         /// Fills all the blanco numbers with random numbers, Needs Blockify to be called first
         /// </summary>
-        static void FillSudoku()
+        /// <param name="type">Fill Method; either Randoml or Deterministic</param>
+        static void FillSudoku([Optional, DefaultParameterValue(FillType.Deterministic)] FillType type)
         {
             List<int> number_range;
             for (int b = 0; b < N; b++)
             {
                 // range of numbers that blanco's can become
                 number_range = Enumerable.Range(1, blocks.Length).ToList();
+                // remove all fixed numbers from the number pool
+                int fix;
+                for (int c = 0; c < N; c++) if ((fix = blocks[b][c]) != 0) number_range.Remove(fix);
                 // loop through alll the blocks
                 for (int x = 0; x < N; x++)
                 {
                     // if blanco value, choose new unique and remove unique from pool
                     if (blocks[b][x] == 0)
                     {
-                        var newx = rand.Next(0, number_range.Count());
-                        blocks[b][x] = number_range[newx];
-                        number_range.Remove(number_range[newx]);
+                        if (type == FillType.Random)
+                        {
+                            var newx = rand.Next(0, number_range.Count());
+                            blocks[b][x] = number_range[newx];
+                            number_range.Remove(number_range[newx]);
+                        }
+                        else
+                        {
+                            var newx = number_range.Last();
+                            blocks[b][x] = newx;
+                            number_range.Remove(newx);
+                        }
                     }
                     else blocks[b][x] *= -1;
                     // indicate fixed value: < 0
                 }
             }
         }
+        enum FillType {Random, Deterministic}
         /// <summary>
         /// Divides the sudoku into equal blocks
         /// </summary>
