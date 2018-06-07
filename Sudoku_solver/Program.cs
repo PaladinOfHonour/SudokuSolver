@@ -1,5 +1,4 @@
-﻿#define DEBUG
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -11,13 +10,14 @@ namespace Sudoku_solver
 {
     class Sudoku_Solver
     {
-        // Three different datastructures for representing the Sudoku State
+        // Four different datastructures for representing the Sudoku State
         static int[][] sudokuRows;
         static int[][] sudokuColumns;
         static int[][] blocks;
         static bool[,] fixedVals;
         // Additional Globals
         static Random rand;
+        static Stopwatch watch;
         static int N, sqrN;
         /// <summary>
         /// Entry Point and startup logic
@@ -25,16 +25,19 @@ namespace Sudoku_solver
         /// <param name="args"></param>
         static void Main(string[] args)
         {
+            watch = new Stopwatch();
+            watch.Start();
             // Sets language of error messages to English (Development enviroment's default culture is "jp")
 #if DEBUG
             if (Debugger.IsAttached)
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 #endif
             Initialize("TestEasy");
-            Debug(DebugPrints.Sudoku | DebugPrints.Blocks);
             // TODO: Test what value of S and LoopLimit is optimal
-            Solve(2, 100, 50);
+            Solve(2, 10000, 50);
+            Console.ReadKey();
 #if DEBUG
+            Debug(DebugPrints.Sudoku | DebugPrints.Blocks);
             while (Console.ReadKey().Key != ConsoleKey.Escape) { }
 #endif
         }
@@ -217,10 +220,14 @@ namespace Sudoku_solver
         /// <param name="random_s">How often to call ranndomwalk when stuck</param>
         static void Solve(int random_s, int loop_limit, int plateau_limit)
         {
+            watch.Stop();
+            Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
+            watch.Reset();
+            watch.Start();
             ILS(random_s, loop_limit, plateau_limit);
-#if DEBUG
-            Debug(DebugPrints.Blocks | DebugPrints.Sudoku);
-#endif
+            watch.Stop();
+            Console.WriteLine("EndScore: " + Evaluate());
+            Console.WriteLine("ElapsedTime(ms): {0}", watch.Elapsed.Milliseconds);
         }
 
 
@@ -230,26 +237,49 @@ namespace Sudoku_solver
         /// <param name="random_s">How often to call random walk when stuck</param>
         static void ILS(int random_s, int loop_limit, int plateau_limit)
         {
+            // state values
             int score = 1; int prev_best = int.MaxValue; int loop = 0; int plateau = 0;
+            // Goto Label for 
             Repeat:
             while (score != 0)
             {
-                if (plateau > plateau_limit) { plateau = 0; break; }
+                if (plateau > plateau_limit)
+                {
+#if DEBUG
+                    if (watch.Elapsed.Milliseconds % 100 < 10) Console.WriteLine("Plateau..  score: " + score);
+#endif
+                    plateau = 0;
+                    break;
+                }
                 score = HillClimbing();
-                if (score >= prev_best)
+                if (score == prev_best)
                 {
                     plateau++;
-                    if (plateau % 10 == 0) Console.WriteLine("Plateau.. " + plateau + "  score: " + score);
+                    prev_best = score;
                     continue;
                 }
-                prev_best = score; Console.WriteLine(score);
+                if (score > prev_best)
+                {
+                    break;
+                }
+                else
+                {
+                    prev_best = score;
+                }
             }
-            if (score == 0) { Debug(DebugPrints.Sudoku); return; }
+            if (score == 0) return;
             // Normally one would store the local optimum here, but for sudoku we want score = 0 and nothing else
-            RandomWalk(random_s); loop++;
-            if (loop < loop_limit) {Console.WriteLine("loop" + loop); Debug(DebugPrints.Blocks); goto Repeat; }
+            if (loop < loop_limit)
+            {
+                RandomWalk(random_s);
+                prev_best = Evaluate();
+                loop++;
+#if DEBUG
+                if (watch.Elapsed.Milliseconds % 100 < 10) Console.WriteLine("loop" + loop + "    score: " + prev_best);
+#endif
+                goto Repeat;
+            }
             Console.WriteLine("Loop Limit reached");
-            Console.WriteLine(Evaluate());
         }
 
         /// <summary>
@@ -280,6 +310,7 @@ namespace Sudoku_solver
             // Finish up
             Swap(best_swap[0], best_swap[1], b_index);
             return block_best;
+ 
         }
         /// <summary>
         /// Adds chaos to climbing to allow to jump out of local maxima
@@ -373,6 +404,6 @@ namespace Sudoku_solver
             // return [x,y]
             return new int[2] { x_offset + x, y_offset + y };
         }
-        #endregion
+#endregion
     }
 }
