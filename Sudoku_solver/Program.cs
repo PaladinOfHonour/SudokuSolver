@@ -11,25 +11,34 @@ namespace Sudoku_solver
 {
     class Sudoku_Solver
     {
+        // Three different datastructures for representing the Sudoku State
         static int[][] sudokuRows;
         static int[][] sudokuColumns;
         static int[][] blocks;
+        static bool[,] fixedVals;
+        // Additional Globals
         static Random rand;
         static int N, sqrN;
+        /// <summary>
+        /// Entry Point and startup logic
+        /// </summary>
+        /// <param name="args"></param>
         static void Main(string[] args)
         {
-            // Sets language of error messages to English
+            // Sets language of error messages to English (Development enviroment's default culture is "jp")
 #if DEBUG
             if (Debugger.IsAttached)
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 #endif
-            Initialize();
-            Solve();
+            Initialize("TestEasy");
+            Debug(DebugPrints.Sudoku | DebugPrints.Blocks);
+            // TODO: Test what value of S and LoopLimit is optimal
+            Solve(2, 100, 50);
 #if DEBUG
             while (Console.ReadKey().Key != ConsoleKey.Escape) { }
 #endif
         }
-
+        // Program Logic
         #region Initialize
         /// <summary>
         /// Contains all initialisation logic
@@ -65,6 +74,8 @@ namespace Sudoku_solver
             // Fill a sudoku based on rows
             sudokuRows = new int[rows.Length][];
             for (int j = 0; j < rows.Length; j++) { sudokuRows[j] = conv(rows[j]); if (sudokuRows[j].Length != rows.Length) throw new Exception("NxM sudoku; N != M"); }
+            // Init fixed vals
+            fixedVals = new bool[rows.Length, rows.Length];
             // Fill a sudoku based on collumns
             sudokuColumns = new int[rows.Length][];
             int[] column = new int[rows.Length];
@@ -74,6 +85,9 @@ namespace Sudoku_solver
                 {
                     // for every row take the k'th element and add to column
                     column[l] = sudokuRows[l][k];
+                    // Fill fixed vals while your at it
+                    if (column[l] != 0) fixedVals[k, l] = true;
+                    else fixedVals[k, l] = false;
                 }
                 // Swap / Clear buffers
                 sudokuColumns[k] = column; column = new int[rows.Length];
@@ -86,13 +100,13 @@ namespace Sudoku_solver
         static void FillSudoku([Optional, DefaultParameterValue(FillType.Deterministic)] FillType type)
         {
             List<int> number_range;
+            int[] xy = new int[2];
             for (int b = 0; b < N; b++)
             {
                 // range of numbers that blanco's can become
                 number_range = Enumerable.Range(1, blocks.Length).ToList();
                 // remove all fixed numbers from the number pool
-                int fix;
-                for (int c = 0; c < N; c++) if ((fix = blocks[b][c]) != 0) number_range.Remove(fix);
+                for (int c = 0; c < N; c++) {xy = BlockToSudokuCoord(b,c);  if (fixedVals[xy[0], xy[1]]) number_range.Remove(blocks[b][c]); }
                 // loop through alll the blocks
                 for (int x = 0; x < N; x++)
                 {
@@ -112,8 +126,6 @@ namespace Sudoku_solver
                             number_range.Remove(newx);
                         }
                     }
-                    else blocks[b][x] *= -1;
-                    // indicate fixed value: < 0
                 }
             }
         }
@@ -163,8 +175,7 @@ namespace Sudoku_solver
                 Console.WriteLine($@"{(dashes = new String('-', (2 * sudokuRows.Length / 3) - 2))}\\{dashes + "-" + (new String('-', (2 * sudokuRows.Length) % 3))}//{dashes}");
                 for (int i = 0; i < sudokuRows.Length; i++)
                 {
-                    for (int j = 0; j < (row = sudokuRows[i]).Length; j++)
-                        Console.Write(row[j] + " ");
+                    for (int j = 0; j < (row = sudokuRows[i]).Length; j++) Console.Write(row[j] + " ");
                     Console.WriteLine();
                 }
                 Console.WriteLine("\n");
@@ -172,7 +183,7 @@ namespace Sudoku_solver
             // Blocks print
             if ((to_print & DebugPrints.Blocks) == DebugPrints.Blocks)
             {
-                int block_row, row;
+                int block_row, row, b_x, b_y, value;
                 // Aesthetic
                 string dashes;
                 Console.WriteLine($@"{(dashes = new String('-', (2 * sudokuRows.Length / 3) - 2))}[[{dashes + "-" + (new String('-', (2 * sudokuRows.Length) % 3))}]]{dashes}");
@@ -185,8 +196,10 @@ namespace Sudoku_solver
                     for (int bj = 0; bj < N; bj++)
                     {
                         // Blocks to printable format indexer
-                        var value = blocks[bj / sqrN + block_row * sqrN][bj % sqrN + row * sqrN];
-                        if (value < 0) Console.Write("F ");
+                        b_x = bj / sqrN + block_row * sqrN; b_y = bj % sqrN + row * sqrN;
+                        value = blocks[b_x][b_y];
+                        var xy = BlockToSudokuCoord(b_x, b_y);
+                        if (fixedVals[xy[0], xy[1]]) { Console.ForegroundColor = ConsoleColor.Magenta; Console.Write(value + " "); Console.ForegroundColor = ConsoleColor.Gray; }
                         else Console.Write(value + " ");
                     }
                     Console.WriteLine("");
@@ -194,18 +207,17 @@ namespace Sudoku_solver
             }
         }
 
-        enum DebugPrints { Sudoku = 0, Blocks = 1};
+        enum DebugPrints { Sudoku = 1, Blocks = 2};
 #endif
         #endregion
         #region Solve logic
         /// <summary>
         /// Solves the sudoku
         /// </summary>
-        static void Solve()
+        /// <param name="random_s">How often to call ranndomwalk when stuck</param>
+        static void Solve(int random_s, int loop_limit, int plateau_limit)
         {
-            //HillClimbing
-            // if stuck ILS
-            Console.WriteLine("EVAL SCORE: " + Evaluate());
+            ILS(random_s, loop_limit, plateau_limit);
 #if DEBUG
             Debug(DebugPrints.Blocks | DebugPrints.Sudoku);
 #endif
@@ -215,57 +227,82 @@ namespace Sudoku_solver
         /// <summary>
         /// Combines hill climbing with a randomwalk to solve the sudoku
         /// </summary>
-        static void ILS()
+        /// <param name="random_s">How often to call random walk when stuck</param>
+        static void ILS(int random_s, int loop_limit, int plateau_limit)
         {
-            HillClimbing();
+            int score = 1; int prev_best = int.MaxValue; int loop = 0; int plateau = 0;
+            Repeat:
+            while (score != 0)
+            {
+                if (plateau > plateau_limit) { plateau = 0; break; }
+                score = HillClimbing();
+                if (score >= prev_best)
+                {
+                    plateau++;
+                    if (plateau % 10 == 0) Console.WriteLine("Plateau.. " + plateau + "  score: " + score);
+                    continue;
+                }
+                prev_best = score; Console.WriteLine(score);
+            }
+            if (score == 0) { Debug(DebugPrints.Sudoku); return; }
+            // Normally one would store the local optimum here, but for sudoku we want score = 0 and nothing else
+            RandomWalk(random_s); loop++;
+            if (loop < loop_limit) {Console.WriteLine("loop" + loop); Debug(DebugPrints.Blocks); goto Repeat; }
+            Console.WriteLine("Loop Limit reached");
+            Console.WriteLine(Evaluate());
         }
 
         /// <summary>
         /// Tries to find the optimal state => the solution
         /// </summary>
-        static void HillClimbing(int curr_best = 0)
+        static int HillClimbing()
         {
-            var b_index = rand.Next(10);    // * Randomly chosen Block
-            int score;                      // * New score after swap
-            int block_best = int.MaxValue;  // * The best score possible by changes in this block
-            int[] best_swap;                // * The corresponding swap required for block_best
+            //if (TERMINATION) something terminate;
+            var b_index = rand.Next(9);        // * Randomly chosen Block
+            int score;                          // * New score after swap
+            int block_best = int.MaxValue;      // * The best score possible by changes in this block
+            int[] best_swap = new int[2];       // * The corresponding swap required for block_best
             // 
             for (int v = 0; v < N; v++)
             {
                 // Swap two: both in rows as collumns : Fixed vaues are < 0
                 for (int k = v; k < N; k++) // only need to swap with values after you as values before already swapped with the current value
                 {
-                    Swap(v, k);
-                    score = Evaluate();
-                    if (score < block_best) { block_best = score; best_swap = new int[2] { v, k }; }
-                    // Reset state
-                    Swap(k, v);
+                    if (Swap(v, k, b_index))
+                    {
+                        score = Evaluate();
+                        if (score < block_best) { block_best = score; best_swap = new int[2] { v, k }; }
+                        // Reset state
+                        Swap(k, v, b_index);
+                    }
                 }
             }
-
-            void Swap(int ind_a, int ind_b)
-            {
-                // Store value a and swap
-                var temp = blocks[b_index][ind_a];
-                blocks[b_index][ind_a] = blocks[b_index][ind_b];
-                blocks[b_index][ind_b] = temp;
-                // Get Sudoku Coordinates
-                var a_xy = BlockToSudokuCoord(b_index, ind_a);
-                var b_xy = BlockToSudokuCoord(b_index, ind_b);
-                // Swap Rows: indexed by y(1) -> x(0)
-                sudokuRows[a_xy[1]][a_xy[0]] = sudokuRows[b_xy[1]][b_xy[0]];
-                sudokuRows[b_xy[1]][b_xy[0]] = temp;
-                // Swap Columns: indexed by x(0) -> y(1)
-                sudokuColumns[a_xy[0]][a_xy[1]] = sudokuColumns[b_xy[0]][b_xy[1]];
-                sudokuColumns[b_xy[0]][b_xy[1]] = temp;
-            }
+            // Finish up
+            Swap(best_swap[0], best_swap[1], b_index);
+            return block_best;
         }
         /// <summary>
         /// Adds chaos to climbing to allow to jump out of local maxima
         /// </summary>
-        static void RandomWalk()
+        /// <param name="s">amount of random swaps</param>
+        static void RandomWalk(int s)
         {
+            int valA = 0; int valB = 0; int block = 0;
             // if this gets stuck -> Try to swap outside just blocks
+            for (int r = 0; r < s; r++)
+            {
+                block = rand.Next(0, N);
+                NoSwap:
+                // Pick random block and block values
+                while (valA == valB)
+                {
+                    valA = rand.Next(0, N);
+                    valB = rand.Next(0, N);
+                }
+                // Swap them or retry if fixed
+                if (!Swap(valA, valB, block)) {valA = valB; goto NoSwap; }
+            }
+
         }
 
         // Supporting functions
@@ -289,6 +326,35 @@ namespace Sudoku_solver
                 return score;
             }
             return CheckTuples(sudokuColumns) + CheckTuples(sudokuRows);
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="ind_a"></param>
+        /// <param name="ind_b"></param>
+        /// <param name="b_index"></param>
+        static bool Swap(int ind_a, int ind_b, int b_index)
+        {
+            // Get Sudoku Coor
+            var a_xy = BlockToSudokuCoord(b_index, ind_a);
+            var b_xy = BlockToSudokuCoord(b_index, ind_b);
+            if (!(fixedVals[a_xy[0], a_xy[1]] | fixedVals[b_xy[0], b_xy[1]]))
+            {
+                // Store value a and swap
+                var temp = blocks[b_index][ind_a];
+                blocks[b_index][ind_a] = blocks[b_index][ind_b];
+                blocks[b_index][ind_b] = temp;
+                // Get Sudoku Coor
+                // Swap Rows: indexed by y(1) -> x(0)
+                sudokuRows[a_xy[1]][a_xy[0]] = sudokuRows[b_xy[1]][b_xy[0]];
+                sudokuRows[b_xy[1]][b_xy[0]] = temp;
+                // Swap Columns: indexed by x(0) -> y(1)
+                sudokuColumns[a_xy[0]][a_xy[1]] = sudokuColumns[b_xy[0]][b_xy[1]];
+                sudokuColumns[b_xy[0]][b_xy[1]] = temp;
+
+                return true;
+            }
+            return false;
         }
         /// <summary>
         /// Returns the x,y coordinates of a given block and blockvalue
