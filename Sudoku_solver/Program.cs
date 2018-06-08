@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -18,6 +19,7 @@ namespace Sudoku_solver
         // Additional Globals
         static Random rand;
         static Stopwatch watch;
+        static FileStream fileOut;
         static int N, sqrN;
         /// <summary>
         /// Entry Point and startup logic
@@ -34,7 +36,17 @@ namespace Sudoku_solver
 #endif
             Initialize("TestEasy");
             // TODO: Test what value of S and LoopLimit is optimal
-            Solve(2, 10000, 50);
+            if (args.Length == 0)
+            {
+                Solve(2, 3000, 50);
+                Console.ReadKey();
+            }
+            else
+            {
+                var args_int = new int[args.Length];
+                for (int i = 0; i < args.Length; i++) args_int[i] = Int32.Parse(args[i]);
+                Solve(args_int[0], args_int[1], args_int[2]);
+            }
             Console.ReadKey();
 #if DEBUG
             Debug(DebugPrints.Sudoku | DebugPrints.Blocks);
@@ -47,9 +59,10 @@ namespace Sudoku_solver
         /// Contains all initialisation logic
         /// </summary>
         /// <param name="filename"></param>
-        static void Initialize(string filename = "Test")
+        static void Initialize(string filename = "Test", string resultFile = "Result")
         {
             rand = new Random();
+            fileOut = new FileStream($@"../../../{resultFile}.txt", FileMode.Append);
             ImportSudoku(filename);
             Blockify();
             FillSudoku();
@@ -60,6 +73,8 @@ namespace Sudoku_solver
         /// <param name="filename"></param>
         static void ImportSudoku(string filename = "Test")
         {
+            // TODO: Fix read in format -> skip first line if !number and use.. row(line) to Char assuming "0022341" etc
+
             // Converts a string of numbers seperated by whitespace to an int[] of said numbers
             Func<string, int[]> conv = (s) => {
                 var ss = s.Split();
@@ -73,7 +88,9 @@ namespace Sudoku_solver
                 return res;
             };
             // Direct Path to Old location: ($@"E:\University\Computational_Intelligence\Sudoku_solver\{filename}.txt")
-            string[] rows = System.IO.File.ReadAllLines(System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\..\\"), $"{filename}.txt")));
+            // Generalized Path to location: System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\..\\"), $"{filename}.txt"))
+            // Quick Path:
+            string[] rows = System.IO.File.ReadAllLines(@"../../../" + filename + ".txt");
             // Fill a sudoku based on rows
             sudokuRows = new int[rows.Length][];
             for (int j = 0; j < rows.Length; j++) { sudokuRows[j] = conv(rows[j]); if (sudokuRows[j].Length != rows.Length) throw new Exception("NxM sudoku; N != M"); }
@@ -218,7 +235,7 @@ namespace Sudoku_solver
         /// Solves the sudoku
         /// </summary>
         /// <param name="random_s">How often to call ranndomwalk when stuck</param>
-        static void Solve(int random_s, int loop_limit, int plateau_limit)
+        static void Solve(int random_s = 2, int loop_limit = 1000, int plateau_limit = 50)
         {
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
@@ -228,6 +245,7 @@ namespace Sudoku_solver
             watch.Stop();
             Console.WriteLine("EndScore: " + Evaluate());
             Console.WriteLine("ElapsedTime(ms): {0}", watch.Elapsed.Milliseconds);
+            // TODO: Fix Stopwatch
         }
 
 
@@ -237,6 +255,7 @@ namespace Sudoku_solver
         /// <param name="random_s">How often to call random walk when stuck</param>
         static void ILS(int random_s, int loop_limit, int plateau_limit)
         {
+            // TODO: Add comments
             // state values
             int score = 1; int prev_best = int.MaxValue; int loop = 0; int plateau = 0;
             // Goto Label for 
@@ -287,8 +306,7 @@ namespace Sudoku_solver
         /// </summary>
         static int HillClimbing()
         {
-            //if (TERMINATION) something terminate;
-            var b_index = rand.Next(9);        // * Randomly chosen Block
+            var b_index = rand.Next(9);         // * Randomly chosen Block
             int score;                          // * New score after swap
             int block_best = int.MaxValue;      // * The best score possible by changes in this block
             int[] best_swap = new int[2];       // * The corresponding swap required for block_best
@@ -404,6 +422,13 @@ namespace Sudoku_solver
             // return [x,y]
             return new int[2] { x_offset + x, y_offset + y };
         }
-#endregion
+        #endregion
+        #region Research
+        static void Output<T>(T result) where T : IFormattable
+        {
+            var to_buffer = result.ToString();
+            fileOut.Write(Encoding.ASCII.GetBytes(to_buffer + "|"), 0, to_buffer.Length + 1);
+        }
+        #endregion
     }
 }
