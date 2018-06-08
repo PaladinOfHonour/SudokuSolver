@@ -1,5 +1,4 @@
 @echo off
-for /d /r %%a in (*) do if /i "%%~nxa" == "Release" if /i "%%a\.." != "obj" set "folderpath=%%a"
+for /d /r %%a in (bin\*) do if /i "%%~nxa" == "Release" set "folderpath=%%a"
 cd %folderpath%
 for %%i in (*.exe) do start "Test" /b "%%i" 2 2000 50
-pause
