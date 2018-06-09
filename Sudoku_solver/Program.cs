@@ -27,18 +27,17 @@ namespace Sudoku_solver
         /// <param name="args"></param>
         static void Main(string[] args)
         {
-            watch = new Stopwatch();
-            watch.Start();
+            watch = Stopwatch.StartNew();
             // Sets language of error messages to English (Development enviroment's default culture is "jp")
 #if DEBUG
             if (Debugger.IsAttached)
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 #endif
-            Initialize("TestEasy");
+            Initialize("Grid06");
             // TODO: Test what value of S and LoopLimit is optimal
             if (args.Length == 0)
             {
-                Solve(2, 3000, 50);
+                Solve(2, 600000, 50);
                 Console.ReadKey();
             }
             else
@@ -77,13 +76,11 @@ namespace Sudoku_solver
 
             // Converts a string of numbers seperated by whitespace to an int[] of said numbers
             Func<string, int[]> conv = (s) => {
-                var ss = s.Split();
+                var ss = s.ToCharArray();
                 int[] res = new int[ss.Length];
-                int parsed;
                 for (int i = 0; i < ss.Length; i++)
                 {
-                    if (Int32.TryParse(ss[i], out parsed)) res[i] = parsed;
-                    else throw new ArgumentException("ERROR: Unsuccesful parse on a sudoku file entry");
+                    res[i] = ss[i] - '0';
                 }
                 return res;
             };
@@ -235,17 +232,21 @@ namespace Sudoku_solver
         /// Solves the sudoku
         /// </summary>
         /// <param name="random_s">How often to call ranndomwalk when stuck</param>
-        static void Solve(int random_s = 2, int loop_limit = 1000, int plateau_limit = 50)
+        static void Solve(int random_s = 2, int time_limit = 600000, int plateau_limit = 50)
         {
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
-            watch.Reset();
-            watch.Start();
-            ILS(random_s, loop_limit, plateau_limit);
+            watch = Stopwatch.StartNew();
+            ILS(random_s, time_limit, plateau_limit);
             watch.Stop();
             Console.WriteLine("EndScore: " + Evaluate());
-            Console.WriteLine("ElapsedTime(ms): {0}", watch.Elapsed.Milliseconds);
-            // TODO: Fix Stopwatch
+            Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
+            // Output values:
+            Output(random_s);
+            Output(time_limit);
+            Output(plateau_limit);
+            Output(watch.ElapsedMilliseconds);
+            OutNewLine();
         }
 
 
@@ -253,7 +254,7 @@ namespace Sudoku_solver
         /// Combines hill climbing with a randomwalk to solve the sudoku
         /// </summary>
         /// <param name="random_s">How often to call random walk when stuck</param>
-        static void ILS(int random_s, int loop_limit, int plateau_limit)
+        static void ILS(int random_s, int time_limit, int plateau_limit)
         {
             // TODO: Add comments
             // state values
@@ -288,7 +289,7 @@ namespace Sudoku_solver
             }
             if (score == 0) return;
             // Normally one would store the local optimum here, but for sudoku we want score = 0 and nothing else
-            if (loop < loop_limit)
+            if (watch.ElapsedMilliseconds < time_limit)
             {
                 RandomWalk(random_s);
                 prev_best = Evaluate();
@@ -298,7 +299,7 @@ namespace Sudoku_solver
 #endif
                 goto Repeat;
             }
-            Console.WriteLine("Loop Limit reached");
+            Console.WriteLine("Time Limit reached");
         }
 
         /// <summary>
@@ -427,7 +428,13 @@ namespace Sudoku_solver
         static void Output<T>(T result) where T : IFormattable
         {
             var to_buffer = result.ToString();
-            fileOut.Write(Encoding.ASCII.GetBytes(to_buffer + "|"), 0, to_buffer.Length + 1);
+            fileOut.Write(Encoding.ASCII.GetBytes(to_buffer + ";"), 0, to_buffer.Length + 1);
+        }
+        static void Output(string result) {
+            fileOut.Write(Encoding.ASCII.GetBytes(result + ";"), 0, result.Length + 1);
+        }
+        static void OutNewLine() {
+            fileOut.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
         }
         #endregion
     }
