@@ -28,25 +28,27 @@ namespace Sudoku_solver
         static void Main(string[] args)
         {
             watch = Stopwatch.StartNew();
-            // Sets language of error messages to English (Development enviroment's default culture is "jp")
 #if DEBUG
+            // Sets language of error messages to English (Development enviroment's default culture is "jp")
             if (Debugger.IsAttached)
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 #endif
-            Initialize("Grid06");
             // TODO: Test what value of S and LoopLimit is optimal
             if (args.Length == 0)
             {
+                Initialize("TestEasy");
+                Output("TestEasy");
                 Solve(2, 600000, 50);
-                Console.ReadKey();
             }
             else
             {
-                var args_int = new int[args.Length];
-                for (int i = 0; i < args.Length; i++) args_int[i] = Int32.Parse(args[i]);
+                var args_int = new int[args.Length - 1];
+                for (int i = 0; i < args.Length - 1; i++) args_int[i] = Int32.Parse(args[i]);
+                string puzzle = args[args.Length - 1];
+                Initialize(puzzle);
+                Output(puzzle);
                 Solve(args_int[0], args_int[1], args_int[2]);
             }
-            Console.ReadKey();
 #if DEBUG
             Debug(DebugPrints.Sudoku | DebugPrints.Blocks);
             while (Console.ReadKey().Key != ConsoleKey.Escape) { }
