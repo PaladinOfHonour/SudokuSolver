@@ -38,7 +38,7 @@ namespace Sudoku_solver
             {
                 Initialize("TestEasy");
                 Output("TestEasy");
-                Solve(2, 600000, 50);
+                Solve();
             }
             else
             {
@@ -47,7 +47,7 @@ namespace Sudoku_solver
                 string puzzle = args[args.Length - 1];
                 Initialize(puzzle);
                 Output(puzzle);
-                Solve(args_int[0], args_int[1], args_int[2]);
+                Solve();
             }
 #if DEBUG
             Debug(DebugPrints.Sudoku | DebugPrints.Blocks);
@@ -234,151 +234,18 @@ namespace Sudoku_solver
         /// Solves the sudoku
         /// </summary>
         /// <param name="random_s">How often to call ranndomwalk when stuck</param>
-        static void Solve(int random_s = 2, int time_limit = 600000, int plateau_limit = 50)
+        static void Solve()
         {
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
-            ILS(random_s, time_limit, plateau_limit);
             watch.Stop();
-            Console.WriteLine("EndScore: " + Evaluate());
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
-            Output(random_s);
-            Output(time_limit);
-            Output(plateau_limit);
             Output(watch.ElapsedMilliseconds);
             OutNewLine();
         }
 
-
-        /// <summary>
-        /// Combines hill climbing with a randomwalk to solve the sudoku
-        /// </summary>
-        /// <param name="random_s">How often to call random walk when stuck</param>
-        static void ILS(int random_s, int time_limit, int plateau_limit)
-        {
-            // TODO: Add comments
-            // state values
-            int score = 1; int prev_best = int.MaxValue; int loop = 0; int plateau = 0;
-            // Goto Label for 
-            Repeat:
-            while (score != 0)
-            {
-                if (plateau > plateau_limit)
-                {
-#if DEBUG
-                    if (watch.Elapsed.Milliseconds % 100 < 10) Console.WriteLine("Plateau..  score: " + score);
-#endif
-                    plateau = 0;
-                    break;
-                }
-                score = HillClimbing();
-                if (score == prev_best)
-                {
-                    plateau++;
-                    prev_best = score;
-                    continue;
-                }
-                if (score > prev_best)
-                {
-                    break;
-                }
-                else
-                {
-                    prev_best = score;
-                }
-            }
-            if (score == 0) return;
-            // Normally one would store the local optimum here, but for sudoku we want score = 0 and nothing else
-            if (watch.ElapsedMilliseconds < time_limit)
-            {
-                RandomWalk(random_s);
-                prev_best = Evaluate();
-                loop++;
-#if DEBUG
-                if (watch.Elapsed.Milliseconds % 100 < 10) Console.WriteLine("loop" + loop + "    score: " + prev_best);
-#endif
-                goto Repeat;
-            }
-            Console.WriteLine("Time Limit reached");
-        }
-
-        /// <summary>
-        /// Tries to find the optimal state => the solution
-        /// </summary>
-        static int HillClimbing()
-        {
-            var b_index = rand.Next(9);         // * Randomly chosen Block
-            int score;                          // * New score after swap
-            int block_best = int.MaxValue;      // * The best score possible by changes in this block
-            int[] best_swap = new int[2];       // * The corresponding swap required for block_best
-            // 
-            for (int v = 0; v < N; v++)
-            {
-                // Swap two: both in rows as collumns : Fixed vaues are < 0
-                for (int k = v; k < N; k++) // only need to swap with values after you as values before already swapped with the current value
-                {
-                    if (Swap(v, k, b_index))
-                    {
-                        score = Evaluate();
-                        if (score < block_best) { block_best = score; best_swap = new int[2] { v, k }; }
-                        // Reset state
-                        Swap(k, v, b_index);
-                    }
-                }
-            }
-            // Finish up
-            Swap(best_swap[0], best_swap[1], b_index);
-            return block_best;
- 
-        }
-        /// <summary>
-        /// Adds chaos to climbing to allow to jump out of local maxima
-        /// </summary>
-        /// <param name="s">amount of random swaps</param>
-        static void RandomWalk(int s)
-        {
-            int valA = 0; int valB = 0; int block = 0;
-            // if this gets stuck -> Try to swap outside just blocks
-            for (int r = 0; r < s; r++)
-            {
-                block = rand.Next(0, N);
-                NoSwap:
-                // Pick random block and block values
-                while (valA == valB)
-                {
-                    valA = rand.Next(0, N);
-                    valB = rand.Next(0, N);
-                }
-                // Swap them or retry if fixed
-                if (!Swap(valA, valB, block)) {valA = valB; goto NoSwap; }
-            }
-
-        }
-
-        // Supporting functions
-        /// <summary>
-        /// Returns a score based on the amount on missing numbers [1 .. 9] in each row & column
-        /// </summary>
-        /// <returns></returns>
-        static int Evaluate()
-        {
-            int CheckTuples(int[][] to_check)
-            {
-                int score = 0;
-                HashSet<int> uniqueNums;
-                for (int i = 0; i < to_check.Length; i++)
-                {
-                    // Cast to Hashset and get all unique numbers
-                    //add the difference between unqiue nums and tuple length to score
-                    uniqueNums = new HashSet<int>(to_check[i]);
-                    score += to_check.Count() - uniqueNums.Count();
-                }
-                return score;
-            }
-            return CheckTuples(sudokuColumns) + CheckTuples(sudokuRows);
-        }
         /// <summary>
         /// 
         /// </summary>
