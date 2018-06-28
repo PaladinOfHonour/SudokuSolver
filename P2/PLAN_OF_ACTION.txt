@@ -1,0 +1,31 @@
+// Constraints
+	// Rows and Columns
+	Store in Short / Uint and check with bitshifts / binary operators
+		* One for each Row and Column
+		* Low memory and Quick Check for constraint violation
+	// Blocks
+	Just as before, store in a Short / Uint and enforce unique
+		* One for each Block
+		* Appoint a block at init
+
+Problem!: Need to store additional meta-data;
+		- Additional List with common pointer?
+		- Struct Object?
+
+// Domains / Knots
+Store in List / Array of Lists
+
+------ Methods ------
+
+void FC (int try)
+{
+	var row = rows[v_p* / rowL]
+	if ( row | (1 << (try - 1) > 0 )
+		ConstraintPeril();
+	var column = columns[v_p* % columnL]
+	if ( column| (1 << (try - 1) )
+		ConstraintPeril();
+
+	domains[v_p*] = new [1] { try }
+	V_p*++;
+}
