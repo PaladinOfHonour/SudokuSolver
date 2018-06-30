@@ -241,9 +241,14 @@ namespace Sudoku_solver
         }
 
         /// <summary>
-        /// Recursive function that solves the sudoku using CB. Call with v_domains and a list of 1..9 for the first time.
+        /// Recursive function that solves the sudoku using CB. Call with [a list of all starting values] and a list of 1..9 for the first time.
         /// </summary>
         static void CB_solve(ushort[] listOfValues, List<ushort> numbersToTry, int slotIndex = 0) {
+            if (numbersToTry.Count == 0) {
+                Console.WriteLine("Out of numbers. Backtracking.");
+                return;
+            }
+
             while (listOfValues[slotIndex] != 0) {
                 slotIndex++;
                 if (slotIndex == listOfValues.Length) {
@@ -255,6 +260,7 @@ namespace Sudoku_solver
             ushort num = numbersToTry[0];
             if (ConstraintCheck(listOfValues, slotIndex, num)) {
                 listOfValues[slotIndex] = num;
+                numbersToTry.RemoveAt(0);
                 CB_solve(listOfValues, new List<ushort>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, slotIndex + 1);
             }
             else {
