@@ -108,6 +108,7 @@ namespace Sudoku_solver
                 rows_c[c] = 0;
                 columns_c[c] = 0;
                 blocks_c[c] = 0;
+                // row / i 
             }
             // Insert all the fixed_vals
             foreach (Tuple<int,int> f in fixed_vals)
@@ -215,28 +216,50 @@ namespace Sudoku_solver
             Output(watch.ElapsedMilliseconds);
             OutNewLine();
         }
-
-        static bool ConstraintCheck(ushort[] listOfValues, int slotIndex, ushort insertValue) {
-            var row = rows_c[slotIndex / N];
-            if ((row | insertValue) > 0) return false;
-            var column = columns_c[slotIndex % N];
-            if ((column | insertValue) > 0) return false;
-            // BLOCK CHECKING
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="realSlot">The index i coresponding to Vi</param>
+        /// <param name="realValue">The value from the Domain to be checked (unencoded)</param>
+        /// <returns></returns>
+        static bool ConstraintCheck(int realSlot, ushort realValue)
+        {
+            // Encode Value from domain to Binary Check-form
+            ushort encodedValue = (ushort)(1 << (realValue - 1));
+            // Find the row constraint to check and check wether value already exists
+            var row = rows_c[realSlot / N];
+            if ((row | encodedValue) > 0) return false;
+            // Do the same for the appropriate column constraint
+            var column = columns_c[realSlot % N];
+            if ((column | encodedValue) > 0) return false;
+            // Given the column and row index, calculate the corresponding block and check it for a violation to boot
+            var block = ((row / sqrtN) * sqrtN) + (column / sqrtN);
+            if ((block | encodedValue) > 0) return false;
+            // If no constraints were violated return true
             return true;
         }
         
         static void FC(int frontier, ushort domain)
         {
-            ushort value = (ushort)(1 << (frontier - 1));
-            var pointer = v_p[frontier];
-            var row = rows_c[pointer / sqrtN];
-            if ((row | value) > 0)
-                throw new Exception("CONSTRAINT");
-            var column = columns_c[pointer % sqrtN];
-            if ((column | value) > 0)
-                throw new Exception("CONSTRAINT");
+            var v_pointer = v_p[frontier];
+            ushort value = 0;
 
-            v_domains[pointer] = value;
+            if (ConstraintCheck(v_pointer, value))
+            {
+                var row_start = v_pointer - (v_pointer % N);
+                var column_start = v_pointer % N;
+                var remove_value = ~(1 << (value - 1));
+                int row_i, column_i;
+                for (int i = 0; i < N; i++)
+                {
+                    row_i = row_start + i;
+                    column_i = column_start + i;
+                    v_domains[row_i] = (ushort)(v_domains[row_i] & remove_value);
+                    v_domains[column_i] = (ushort)(v_domains[column_i] & remove_value);
+                    if (v_domains[row_i] == 0 || v_domains[column_i] == 0) return;
+                }
+                v_domains[v_pointer] = value;
+            }
             // vp_++;
         }
 
