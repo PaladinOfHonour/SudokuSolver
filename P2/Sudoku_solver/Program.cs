@@ -12,16 +12,14 @@ namespace Sudoku_solver
     class Sudoku_Solver
     {
         // Four different datastructures for representing the Sudoku State
-        static ushort[] rows_c;
-        static ushort[] columns_c;
-        static ushort[] blocks_c;
+        static ushort[] rows_c, columns_c, blocks_c;
         static ushort[] v_domains;
         static int[] v_p;
         // Additional Globals
         static Random rand;
         static Stopwatch watch;
         static FileStream fileOut;
-        static int N, sqrN;
+        static int N, sqrtN;
         delegate void Insert_Logic(int v_pointer, ushort domain);
         static Insert_Logic Insert;
         /// <summary>
@@ -32,7 +30,7 @@ namespace Sudoku_solver
         {
             watch = Stopwatch.StartNew();
 #if DEBUG
-            // Sets language of error messages to English (Development enviroment's default culture is "jp")
+            // Sets language of error messages to English (Development environment's default culture is "jp")
             if (Debugger.IsAttached)
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 #endif
@@ -79,15 +77,16 @@ namespace Sudoku_solver
             // Direct Path to Old location: ($@"E:\University\Computational_Intelligence\Sudoku_solver\{filename}.txt")
             // Generalized Path to location: System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\..\\"), $"{filename}.txt"))
             // Quick Path:
-            string[] rows = System.IO.File.ReadAllLines(@"../../../" + filename + ".txt");
+            string[] rows = System.IO.File.ReadAllLines($@"../../../{filename}.txt");
             // Fill a sudoku based on rows
             N = rows.Length;
             ushort domain = (ushort)(Math.Pow(2, N) - 1);
-            sqrN = (int)Math.Sqrt(N);
+            sqrtN = (int)Math.Sqrt(N);
             rows_c = new ushort[N];
             columns_c = new ushort[N];
             blocks_c = new ushort[N];
             v_domains = new ushort[N * N];
+
             // Initalize all the domains and locate the fixed vals
             List<Tuple<int, int>> fixed_vals = new List<Tuple<int,int>>();
             char[] ss;
@@ -99,7 +98,7 @@ namespace Sudoku_solver
                 {
                     val = ss[j];
                     if (val != '0')
-                        fixed_vals.Add(new Tuple<int, int>(i * N + j, (int)Char.GetNumericValue(val)));
+                        fixed_vals.Add(new Tuple<int, int>(i * N + j, val - '0'));
                     v_domains[i * N + j] = domain;
                 }
             }
@@ -114,7 +113,6 @@ namespace Sudoku_solver
             foreach (Tuple<int,int> f in fixed_vals)
                 Insert(f.Item1, (ushort)f.Item2);
         }
-        //
 
         static void Insert_Init(CSP solve_logic)
         {
@@ -205,41 +203,36 @@ namespace Sudoku_solver
         /// <summary>
         /// Solves the sudoku
         /// </summary>
-        /// <param name="random_s">How often to call ranndomwalk when stuck</param>
-<<<<<<< HEAD
-        static void Solve(int time_limit = 600000)
-=======
         static void Solve()
->>>>>>> master
         {
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
-<<<<<<< HEAD
             // SOLVE LOGIC
             watch.Stop();
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
-            Output(time_limit);
-=======
-            watch.Stop();
-            Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
-            // Output values:
->>>>>>> master
             Output(watch.ElapsedMilliseconds);
             OutNewLine();
         }
 
-<<<<<<< HEAD
-        // 
+        static bool ConstraintCheck(ushort[] listOfValues, int slotIndex, ushort insertValue) {
+            var row = rows_c[slotIndex / N];
+            if ((row | insertValue) > 0) return false;
+            var column = columns_c[slotIndex % N];
+            if ((column | insertValue) > 0) return false;
+            // BLOCK CHECKING
+            return true;
+        }
+        
         static void FC(int frontier, ushort domain)
         {
             ushort value = (ushort)(1 << (frontier - 1));
             var pointer = v_p[frontier];
-            var row = rows_c[pointer / sqrN];
+            var row = rows_c[pointer / sqrtN];
             if ((row | value) > 0)
                 throw new Exception("CONSTRAINT");
-            var column = columns_c[pointer % sqrN];
+            var column = columns_c[pointer % sqrtN];
             if ((column | value) > 0)
                 throw new Exception("CONSTRAINT");
 
@@ -247,8 +240,29 @@ namespace Sudoku_solver
             // vp_++;
         }
 
-=======
->>>>>>> master
+        /// <summary>
+        /// Recursive function that solves the sudoku using CB. Call with v_domains and a list of 1..9 for the first time.
+        /// </summary>
+        static void CB_solve(ushort[] listOfValues, List<ushort> numbersToTry, int slotIndex = 0) {
+            while (listOfValues[slotIndex] != 0) {
+                slotIndex++;
+                if (slotIndex == listOfValues.Length) {
+                    Console.WriteLine("Solved.");
+                    return;
+                }
+            }
+
+            ushort num = numbersToTry[0];
+            if (ConstraintCheck(listOfValues, slotIndex, num)) {
+                listOfValues[slotIndex] = num;
+                CB_solve(listOfValues, new List<ushort>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, slotIndex + 1);
+            }
+            else {
+                numbersToTry.RemoveAt(0);
+                CB_solve(listOfValues, numbersToTry, slotIndex);
+            }
+        }
+
         /// <summary>
         /// 
         /// </summary>
