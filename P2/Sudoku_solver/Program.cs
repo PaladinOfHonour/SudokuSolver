@@ -12,15 +12,18 @@ namespace Sudoku_solver
     class Sudoku_Solver
     {
         // Four different datastructures for representing the Sudoku State
-        static int[][] sudokuRows;
-        static int[][] sudokuColumns;
-        static int[][] blocks;
-        static bool[,] fixedVals;
+        static ushort[] rows_c;
+        static ushort[] columns_c;
+        static ushort[] blocks_c;
+        static ushort[] v_domains;
+        static int[] v_p;
         // Additional Globals
         static Random rand;
         static Stopwatch watch;
         static FileStream fileOut;
         static int N, sqrN;
+        delegate void Insert_Logic(int v_pointer, ushort domain);
+        static Insert_Logic Insert;
         /// <summary>
         /// Entry Point and startup logic
         /// </summary>
@@ -64,9 +67,8 @@ namespace Sudoku_solver
         {
             rand = new Random();
             fileOut = new FileStream($@"../../../{resultFile}.txt", FileMode.Append);
+            Insert_Init(CSP.FC);
             ImportSudoku(filename);
-            Blockify();
-            FillSudoku();
         }
         /// <summary>
         /// Converts a sudoku file to all the approriate datastructures
@@ -74,110 +76,67 @@ namespace Sudoku_solver
         /// <param name="filename"></param>
         static void ImportSudoku(string filename = "Test")
         {
-            // TODO: Fix read in format -> skip first line if !number and use.. row(line) to Char assuming "0022341" etc
-
-            // Converts a string of numbers seperated by whitespace to an int[] of said numbers
-            Func<string, int[]> conv = (s) => {
-                var ss = s.ToCharArray();
-                int[] res = new int[ss.Length];
-                for (int i = 0; i < ss.Length; i++)
-                {
-                    res[i] = ss[i] - '0';
-                }
-                return res;
-            };
             // Direct Path to Old location: ($@"E:\University\Computational_Intelligence\Sudoku_solver\{filename}.txt")
             // Generalized Path to location: System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\..\\"), $"{filename}.txt"))
             // Quick Path:
             string[] rows = System.IO.File.ReadAllLines(@"../../../" + filename + ".txt");
             // Fill a sudoku based on rows
-            sudokuRows = new int[rows.Length][];
-            for (int j = 0; j < rows.Length; j++) { sudokuRows[j] = conv(rows[j]); if (sudokuRows[j].Length != rows.Length) throw new Exception("NxM sudoku; N != M"); }
-            // Init fixed vals
-            fixedVals = new bool[rows.Length, rows.Length];
-            // Fill a sudoku based on collumns
-            sudokuColumns = new int[rows.Length][];
-            int[] column = new int[rows.Length];
-            for (int k = 0; k < rows.Length; k++)
+            N = rows.Length;
+            ushort domain = (ushort)(Math.Pow(2, N) - 1);
+            sqrN = (int)Math.Sqrt(N);
+            rows_c = new ushort[N];
+            columns_c = new ushort[N];
+            blocks_c = new ushort[N];
+            v_domains = new ushort[N * N];
+            // Initalize all the domains and locate the fixed vals
+            List<Tuple<int, int>> fixed_vals = new List<Tuple<int,int>>();
+            char[] ss;
+            char val;
+            for (int i = 0; i < rows.Length; i++)
             {
-                for (int l = 0; l < rows.Length; l++)
-                {
-                    // for every row take the k'th element and add to column
-                    column[l] = sudokuRows[l][k];
-                    // Fill fixed vals while your at it
-                    if (column[l] != 0) fixedVals[k, l] = true;
-                    else fixedVals[k, l] = false;
-                }
-                // Swap / Clear buffers
-                sudokuColumns[k] = column; column = new int[rows.Length];
-            }
-        }
-        /// <summary>
-        /// Fills all the blanco numbers with random numbers, Needs Blockify to be called first
-        /// </summary>
-        /// <param name="type">Fill Method; either Randoml or Deterministic</param>
-        static void FillSudoku([Optional, DefaultParameterValue(FillType.Deterministic)] FillType type)
-        {
-            List<int> number_range;
-            int[] xy = new int[2];
-            for (int b = 0; b < N; b++)
-            {
-                // range of numbers that blanco's can become
-                number_range = Enumerable.Range(1, blocks.Length).ToList();
-                // remove all fixed numbers from the number pool
-                for (int c = 0; c < N; c++) {xy = BlockToSudokuCoord(b,c);  if (fixedVals[xy[0], xy[1]]) number_range.Remove(blocks[b][c]); }
-                // loop through alll the blocks
-                for (int x = 0; x < N; x++)
-                {
-                    // if blanco value, choose new unique and remove unique from pool
-                    if (blocks[b][x] == 0)
-                    {
-                        if (type == FillType.Random)
-                        {
-                            var newx = rand.Next(0, number_range.Count());
-                            blocks[b][x] = number_range[newx];
-                            number_range.Remove(number_range[newx]);
-                        }
-                        else
-                        {
-                            var newx = number_range.Last();
-                            blocks[b][x] = newx;
-                            number_range.Remove(newx);
-                        }
-                    }
-                }
-            }
-        }
-        enum FillType {Random, Deterministic}
-        /// <summary>
-        /// Divides the sudoku into equal blocks
-        /// </summary>
-        /// <returns>an array of N blocks</returns>
-        static void Blockify()
-        {
-            // Check wether the given sudoku is of a proper sudoku format
-            double square;
-            int x_off, y_off;
-            N = sudokuRows.Length;
-            if ((square = Math.Sqrt(N)) % 1 != 0) throw new ArgumentException("Sudoku nxn: Sqrt(n) is not a whole number");
-            // divide the sudoku into N blocks of Sqrt(N)
-            blocks = new int[N][];
-            int[] block = new int[N];
-            sqrN = (int)square;
-            // blocks loop; i -> block index
-            for (int i = 0; i < N; i++)
-            {
-                x_off = i % sqrN; y_off = i / sqrN;
-                // block loop; j -> block value index
+                ss = rows[i].ToCharArray();
                 for (int j = 0; j < N; j++)
                 {
-                    // indexer that fills blocks left to right, top to bottom
-                    block[j] = sudokuRows[j / sqrN + y_off * sqrN][j % sqrN + x_off * sqrN];
+                    val = ss[j];
+                    if (val != '0')
+                        fixed_vals.Add(new Tuple<int, int>(i * N + j, (int)Char.GetNumericValue(val)));
+                    v_domains[i * N + j] = domain;
                 }
-                blocks[i] = block;
-                block = new int[N];
+            }
+            // Initalize all the constraints cij
+            for (int c = 0; c < N; c++)
+            {
+                rows_c[c] = 0;
+                columns_c[c] = 0;
+                blocks_c[c] = 0;
+            }
+            // Insert all the fixed_vals
+            foreach (Tuple<int,int> f in fixed_vals)
+                Insert(f.Item1, (ushort)f.Item2);
+        }
+        //
+
+        static void Insert_Init(CSP solve_logic)
+        {
+            switch (solve_logic)
+            {
+                case CSP.FC:
+                    Insert = FC;
+                    break;
+                case CSP.FC_:
+
+                    break;
+                case CSP.CB:
+
+                    break;
+                case CSP.CB_:
+
+                    break;
+                default:
+                    break;
             }
         }
+        enum CSP { FC, FC_, CB, CB_ };
         #endregion
         #region Debug
 #if DEBUG
@@ -189,16 +148,28 @@ namespace Sudoku_solver
             // Sudoku Print
             if ((to_print & DebugPrints.Sudoku) == DebugPrints.Sudoku)
             {
-                int[] row; string dashes;
+                string dashes; ushort domain_value; char[] row_print = new char[2 * N - 1]; int pointer;
+                // Fill in the spaces
+                for (int c = 1; c < N; c += 2)
+                    row_print[c] = ' ';
                 //Returns a string ---\\---//--- equal in length to the sudoku
-                Console.WriteLine($@"{(dashes = new String('-', (2 * sudokuRows.Length / 3) - 2))}\\{dashes + "-" + (new String('-', (2 * sudokuRows.Length) % 3))}//{dashes}");
-                for (int i = 0; i < sudokuRows.Length; i++)
+                Console.WriteLine($@"{(dashes = new String('-', (2 * N / 3) - 2))}\\{dashes + "-" + (new String('-', (2 * N) % 3))}//{dashes}");
+                for (int i = 0; i < N * N; i++)
                 {
-                    for (int j = 0; j < (row = sudokuRows[i]).Length; j++) Console.Write(row[j] + " ");
+                    for (int j = 0; j < N; j++)
+                    {
+                        pointer = i * N + j;
+                        domain_value = v_domains[pointer];
+                        // Updated to more efficient method -> https://stackoverflow.com/questions/3160659/innovative-way-for-checking-if-number-has-only-one-on-bit-in-signed-int
+                        // As the Domain !contain 0, no need to check for edge case
+                        if ((domain_value & domain_value - 1) == 0) row_print[pointer] = (char)domain_value;
+                        else row_print[pointer] = '0';
+                    }
                     Console.WriteLine();
                 }
                 Console.WriteLine("\n");
             }
+            /*
             // Blocks print
             if ((to_print & DebugPrints.Blocks) == DebugPrints.Blocks)
             {
@@ -224,9 +195,10 @@ namespace Sudoku_solver
                     Console.WriteLine("");
                 }
             }
+            */
         }
 
-        enum DebugPrints { Sudoku = 1, Blocks = 2};
+        enum DebugPrints { Sudoku = 1, Domains = 2, Constraints = 4};
 #endif
         #endregion
         #region Solve logic
@@ -234,151 +206,36 @@ namespace Sudoku_solver
         /// Solves the sudoku
         /// </summary>
         /// <param name="random_s">How often to call ranndomwalk when stuck</param>
-        static void Solve(int random_s = 2, int time_limit = 600000, int plateau_limit = 50)
+        static void Solve(int time_limit = 600000)
         {
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
-            ILS(random_s, time_limit, plateau_limit);
+            // SOLVE LOGIC
             watch.Stop();
-            Console.WriteLine("EndScore: " + Evaluate());
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
-            Output(random_s);
             Output(time_limit);
-            Output(plateau_limit);
             Output(watch.ElapsedMilliseconds);
             OutNewLine();
         }
 
-
-        /// <summary>
-        /// Combines hill climbing with a randomwalk to solve the sudoku
-        /// </summary>
-        /// <param name="random_s">How often to call random walk when stuck</param>
-        static void ILS(int random_s, int time_limit, int plateau_limit)
+        // 
+        static void FC(int frontier, ushort domain)
         {
-            // TODO: Add comments
-            // state values
-            int score = 1; int prev_best = int.MaxValue; int loop = 0; int plateau = 0;
-            // Goto Label for 
-            Repeat:
-            while (score != 0)
-            {
-                if (plateau > plateau_limit)
-                {
-#if DEBUG
-                    if (watch.Elapsed.Milliseconds % 100 < 10) Console.WriteLine("Plateau..  score: " + score);
-#endif
-                    plateau = 0;
-                    break;
-                }
-                score = HillClimbing();
-                if (score == prev_best)
-                {
-                    plateau++;
-                    prev_best = score;
-                    continue;
-                }
-                if (score > prev_best)
-                {
-                    break;
-                }
-                else
-                {
-                    prev_best = score;
-                }
-            }
-            if (score == 0) return;
-            // Normally one would store the local optimum here, but for sudoku we want score = 0 and nothing else
-            if (watch.ElapsedMilliseconds < time_limit)
-            {
-                RandomWalk(random_s);
-                prev_best = Evaluate();
-                loop++;
-#if DEBUG
-                if (watch.Elapsed.Milliseconds % 100 < 10) Console.WriteLine("loop" + loop + "    score: " + prev_best);
-#endif
-                goto Repeat;
-            }
-            Console.WriteLine("Time Limit reached");
+            ushort value = (ushort)(1 << (frontier - 1));
+            var pointer = v_p[frontier];
+            var row = rows_c[pointer / sqrN];
+            if ((row | value) > 0)
+                throw new Exception("CONSTRAINT");
+            var column = columns_c[pointer % sqrN];
+            if ((column | value) > 0)
+                throw new Exception("CONSTRAINT");
+
+            v_domains[pointer] = value;
+            // vp_++;
         }
 
-        /// <summary>
-        /// Tries to find the optimal state => the solution
-        /// </summary>
-        static int HillClimbing()
-        {
-            var b_index = rand.Next(9);         // * Randomly chosen Block
-            int score;                          // * New score after swap
-            int block_best = int.MaxValue;      // * The best score possible by changes in this block
-            int[] best_swap = new int[2];       // * The corresponding swap required for block_best
-            // 
-            for (int v = 0; v < N; v++)
-            {
-                // Swap two: both in rows as collumns : Fixed vaues are < 0
-                for (int k = v; k < N; k++) // only need to swap with values after you as values before already swapped with the current value
-                {
-                    if (Swap(v, k, b_index))
-                    {
-                        score = Evaluate();
-                        if (score < block_best) { block_best = score; best_swap = new int[2] { v, k }; }
-                        // Reset state
-                        Swap(k, v, b_index);
-                    }
-                }
-            }
-            // Finish up
-            Swap(best_swap[0], best_swap[1], b_index);
-            return block_best;
- 
-        }
-        /// <summary>
-        /// Adds chaos to climbing to allow to jump out of local maxima
-        /// </summary>
-        /// <param name="s">amount of random swaps</param>
-        static void RandomWalk(int s)
-        {
-            int valA = 0; int valB = 0; int block = 0;
-            // if this gets stuck -> Try to swap outside just blocks
-            for (int r = 0; r < s; r++)
-            {
-                block = rand.Next(0, N);
-                NoSwap:
-                // Pick random block and block values
-                while (valA == valB)
-                {
-                    valA = rand.Next(0, N);
-                    valB = rand.Next(0, N);
-                }
-                // Swap them or retry if fixed
-                if (!Swap(valA, valB, block)) {valA = valB; goto NoSwap; }
-            }
-
-        }
-
-        // Supporting functions
-        /// <summary>
-        /// Returns a score based on the amount on missing numbers [1 .. 9] in each row & column
-        /// </summary>
-        /// <returns></returns>
-        static int Evaluate()
-        {
-            int CheckTuples(int[][] to_check)
-            {
-                int score = 0;
-                HashSet<int> uniqueNums;
-                for (int i = 0; i < to_check.Length; i++)
-                {
-                    // Cast to Hashset and get all unique numbers
-                    //add the difference between unqiue nums and tuple length to score
-                    uniqueNums = new HashSet<int>(to_check[i]);
-                    score += to_check.Count() - uniqueNums.Count();
-                }
-                return score;
-            }
-            return CheckTuples(sudokuColumns) + CheckTuples(sudokuRows);
-        }
         /// <summary>
         /// 
         /// </summary>
@@ -397,7 +254,7 @@ namespace Sudoku_solver
                 blocks[b_index][ind_a] = blocks[b_index][ind_b];
                 blocks[b_index][ind_b] = temp;
                 // Get Sudoku Coor
-                // Swap Rows: indexed by y(1) -> x(0)
+                // Swap Rows: indexed  by y(1) -> x(0)
                 sudokuRows[a_xy[1]][a_xy[0]] = sudokuRows[b_xy[1]][b_xy[0]];
                 sudokuRows[b_xy[1]][b_xy[0]] = temp;
                 // Swap Columns: indexed by x(0) -> y(1)
@@ -407,23 +264,6 @@ namespace Sudoku_solver
                 return true;
             }
             return false;
-        }
-        /// <summary>
-        /// Returns the x,y coordinates of a given block and blockvalue
-        /// </summary>
-        /// <param name="b_index"></param>
-        /// <param name="v_index"></param>
-        /// <returns>int[2] := [x,y]</returns>
-        static int[] BlockToSudokuCoord(int b_index, int v_index)
-        {
-            // Block induced offsets
-            var x_offset = (b_index % sqrN) * sqrN;
-            var y_offset = (b_index / sqrN) * sqrN;
-            // In-block induced offsets
-            var x = v_index % sqrN;
-            var y = v_index / sqrN;
-            // return [x,y]
-            return new int[2] { x_offset + x, y_offset + y };
         }
         #endregion
         #region Research
