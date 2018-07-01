@@ -20,8 +20,8 @@ namespace Sudoku_solver
         static Stopwatch watch;
         static FileStream fileOut;
         static int N, sqrtN;
-        delegate void Insert_Logic(int v_pointer);
-        static Insert_Logic Insert;
+        delegate void Solve_Logic();
+        static Solve_Logic Insert;
         /// <summary>
         /// Entry Point and startup logic
         /// </summary>
@@ -36,8 +36,8 @@ namespace Sudoku_solver
 #endif
             if (args.Length == 0)
             {
-                Initialize("Test");
-                Output("Test");
+                Initialize("4");
+                Output("4");
                 Solve();
             }
             else
@@ -64,7 +64,7 @@ namespace Sudoku_solver
         {
             rand = new Random();
             fileOut = new FileStream($@"../../../{resultFile}.txt", FileMode.Append);
-            Insert_Init(CSP.FC);
+            //Insert_Init(CSP.FC);
             ImportSudoku(filename);
         }
         /// <summary>
@@ -143,12 +143,12 @@ namespace Sudoku_solver
             v_domains[realSlot] = new List<int>() { value };
         }
 
-        static void Insert_Init(CSP solve_logic)
+        static void Solve_Init(CSP solve_logic)
         {
             switch (solve_logic)
             {
                 case CSP.FC:
-                    Insert = FC;
+                    //Insert = FC;
                     break;
                 case CSP.FC_:
 
@@ -226,7 +226,7 @@ namespace Sudoku_solver
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
             //FC();
-            CB_solve(realValues, new List<int>() {1,2,3,4,5,6,7,8,9 });
+            CB_solve(0);
             watch.Stop();
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
@@ -253,23 +253,26 @@ namespace Sudoku_solver
             var column_c = columns_c[column];
             if ((column_c & encodedValue) > 0) return false;
             // Given the column and row index, calculate the corresponding block and check it for a violation to boot
-            var block = blocks_c[((row / sqrtN) * sqrtN) + (column / sqrtN)];
-            if ((block & encodedValue) > 0) return false;
+            var block_c = blocks_c[((row / sqrtN) * sqrtN) + (column / sqrtN)];
+            if ((block_c & encodedValue) > 0) return false;
             // If no constraints were violated return true
             return true;
         }
-
+        /// <summary>
+        /// XOR Update
+        /// </summary>
+        /// <param name="realSlot"></param>
+        /// <param name="realValue"></param>
         static void UpdateConstraints(int realSlot, int realValue)
         {
             // Calculate the block index and encode the value to an ushort
             ushort encoded_val = (ushort)(1 << (realValue - 1));
             var block_id = (((realSlot / N) / sqrtN) * sqrtN) + ((realSlot % N) / sqrtN);
             // Update all three constraints
-            rows_c[realSlot / N] = (ushort)(rows_c[realSlot / N] | encoded_val);
-            columns_c[realSlot % N] = (ushort)(columns_c[realSlot % N] | encoded_val);
-            blocks_c[block_id] = (ushort)(blocks_c[block_id] | encoded_val);
+            rows_c[realSlot / N] = (ushort)(rows_c[realSlot / N] ^ encoded_val);
+            columns_c[realSlot % N] = (ushort)(columns_c[realSlot % N] ^ encoded_val);
+            blocks_c[block_id] = (ushort)(blocks_c[block_id] ^ encoded_val);
         }
-
         /// <summary>
         /// 
         /// </summary>
@@ -285,7 +288,6 @@ namespace Sudoku_solver
             // Try each possible value of the base domain
             for (int i = 0; i < domain.Count; i++)
             {
-                langs[v_pointer]++;
                 value = domain[i];
                 // Check wether the value assignment is valid
                 if (ConstraintCheck(v_pointer, value))
@@ -328,48 +330,55 @@ namespace Sudoku_solver
         /// <summary>
         /// Recursive function that solves the sudoku using CB. Call with realValues and a list of 1..9 for the first time.
         /// </summary>
-        static bool CB_solve(int[] listOfValues, List<int> numbersToTry, int slotIndex = 0)
+        static bool CB_solve(int frontier = 0)
         {
-            bool back_track = false;
-            int current_val = realValues[slotIndex];
-            //
-            if (numbersToTry.Count == 0) {
-                Console.WriteLine("Out of numbers. Backtracking.");
-                return true;
-            }
-
-            while (listOfValues[slotIndex] != 0) {
-                slotIndex++;
-                if (slotIndex == listOfValues.Length) {
-                    Console.WriteLine("Solved.");
-                    realValues = listOfValues;
-                    return false;
-                }
-            }
-
-            retry:
-
-            int num = numbersToTry[0];
-            if (ConstraintCheck(slotIndex, num)) {
-                listOfValues[slotIndex] = num;
-                UpdateConstraints(slotIndex, num);
-                numbersToTry.RemoveAt(0);
-                back_track = CB_solve(listOfValues, new List<int>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, slotIndex + 1);
-            }
-            else {
-                numbersToTry.RemoveAt(0);
-                back_track = CB_solve(listOfValues, numbersToTry, slotIndex);
-            }
-
-            if (back_track)
+            int prev_value, new_frontier;
+            // Try all possible values for this node
+            for (int i = 1; i <= N; i++)
             {
-                // Set back values
-                UpdateConstraints(slotIndex, current_val);
-
-                if (numbersToTry.Count == 0) return true;
-                else goto retry;
+                // Check wether the value adheres to the constraints
+                if (ConstraintCheck(frontier, i))
+                {
+                    UpdateConstraints(frontier, i);
+                    // store the old value for back tracking
+                    prev_value = realValues[frontier];
+                    realValues[frontier] = i;
+                    // Find the next frontier
+                    new_frontier = frontier;
+                    while (realValues[new_frontier] != 0)
+                    {
+                        new_frontier++;
+                        if (new_frontier == realValues.Length)
+                        {
+                            // All nodes have there values set
+                            Console.WriteLine("Solved.");
+                            return false;
+                            // false means no backtracking
+                        }
+                    }
+                    if (new_frontier == 8)
+                    {
+                        //Console.WriteLine();
+                    }
+                    // Enter recursion for next frontier and check wether it returns solved
+                    if (CB_solve(new_frontier))
+                    {
+                        realValues[frontier] = prev_value;
+                        UpdateConstraints(frontier, i);
+                        continue;
+                        // try the next value after resetting the state
+                    }
+                    else
+                    {
+                        // returned solved
+                        return false;
+                    }
+                }
+                // Otherwise try the next value
+                else continue;
             }
-            return false;
+            // If you get here: all numbers have been tried
+            return true;
         }
         #endregion
         #region Research
