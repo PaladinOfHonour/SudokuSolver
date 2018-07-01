@@ -39,8 +39,8 @@ namespace Sudoku_solver
 #endif
             if (args.Length == 0)
             {
-                Initialize("2");
-                Output("2");
+                Initialize("1");
+                Output("1");
                 Solve();
             }
             else
@@ -242,6 +242,7 @@ namespace Sudoku_solver
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
             Output(watch.ElapsedMilliseconds);
+            Output(recursionCount);
             OutNewLine();
         }
         /// <summary>
