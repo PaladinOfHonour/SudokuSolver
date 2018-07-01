@@ -49,8 +49,8 @@ namespace Sudoku_solver
                 var args_int = new int[args.Length - 1];
                 for (int i = 0; i < args.Length - 1; i++) args_int[i] = Int32.Parse(args[i]);
                 string puzzle = args[args.Length - 1];
+                Output(puzzle);
                 Initialize(puzzle, csp_type: (CSP)args_int[0]);
-                Output(recursionCount);
                 Solve();
             }
 #if DEBUG
@@ -254,7 +254,7 @@ namespace Sudoku_solver
         /// <summary>
         /// 
         /// </summary>
-        static void HeuristicSort() { v_p.OrderBy(x => v_domains[x].Count); }
+        static void HeuristicSort() { v_p = v_p.OrderBy(x => v_domains[x].Count).ToArray(); }
         /// <summary>
         /// 
         /// </summary>
