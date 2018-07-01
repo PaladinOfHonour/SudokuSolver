@@ -15,6 +15,7 @@ namespace Sudoku_solver
         static ushort[] rows_c, columns_c, blocks_c;
         static List<int>[] v_domains;
         static int[] v_p, realValues;
+        static HashSet<int> fixeds;
         // Additional Globals
         static Random rand;
         static Stopwatch watch;
@@ -39,8 +40,8 @@ namespace Sudoku_solver
 #endif
             if (args.Length == 0)
             {
-                Initialize("1");
-                Output("1");
+                Initialize("Test", csp_type: CSP.CB_);
+                Output("Test");
                 Solve();
             }
             else
@@ -53,6 +54,7 @@ namespace Sudoku_solver
                 Solve();
             }
 #if DEBUG
+            Console.WriteLine(recursionCount);
             Debug(alg_type);
             while (Console.ReadKey().Key != ConsoleKey.Escape) { }
 #endif
@@ -91,6 +93,7 @@ namespace Sudoku_solver
             v_domains = new List<int>[N * N];
             realValues = new int[N * N];
             v_p = Enumerable.Range(0, N * N).ToArray();
+            fixeds = new HashSet<int>();
 
             // Initalize all the domains and locate the fixed vals
             List<int> fixed_vals = new List<int>();
@@ -103,7 +106,10 @@ namespace Sudoku_solver
                 {
                     val = ss[j];
                     if (val != '0')
+                    {
                         fixed_vals.Add(i * N + j);
+                        fixeds.Add(i * N + j);
+                    }
                     // Set all domains to maximum
                     v_domains[i * N + j] = Enumerable.Range(1, 9).ToList();
                     realValues[i * N + j] = val - '0';
@@ -350,10 +356,6 @@ namespace Sudoku_solver
         /// </summary>
         static bool CB(int frontier = 0)
         {
-            if (recursionCount > 100)
-            {
-                Debug(CSP.CB);
-            }
             recursionCount++;
             //
             int pointer = v_p[frontier];
@@ -361,12 +363,6 @@ namespace Sudoku_solver
             // Try all possible values for this node
             for (int i = 1; i <= N; i++)
             {
-
-                if (pointer == 0)
-                {
-                    Console.WriteLine();
-                }
-
                 // Check wether the value adheres to the constraints
                 if (ConstraintCheck(pointer, i))
                 {
@@ -379,6 +375,7 @@ namespace Sudoku_solver
                     while (realValues[v_p[new_frontier]] != 0)
                     {
                         new_frontier++;
+                        if (fixeds.Contains(new_frontier)) continue;
                         if (new_frontier == realValues.Length)
                         {
                             // All nodes have there values set
