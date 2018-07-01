@@ -128,7 +128,7 @@ namespace Sudoku_solver
                 Insert_Fixed(f, realValues[f]);
         }
         /// <summary>
-        /// 
+        /// Inserts the fixed values and adjusts the constraints and domains accordingly
         /// </summary>
         /// <param name="realSlot"></param>
         /// <param name="value"></param>
@@ -254,11 +254,11 @@ namespace Sudoku_solver
             OutNewLine();
         }
         /// <summary>
-        /// 
+        /// Sorts the v_p list based on Domain size of v_p&
         /// </summary>
         static void HeuristicSort() { v_p = v_p.OrderBy(x => v_domains[x].Count).ToArray(); }
         /// <summary>
-        /// 
+        /// Checks wether a value assignment is valid
         /// </summary>
         /// <param name="realSlot">The index i coresponding to Vi</param>
         /// <param name="realValue">The value from the Domain to be checked (unencoded)</param>
@@ -299,16 +299,15 @@ namespace Sudoku_solver
             blocks_c[block_id] = (ushort)(blocks_c[block_id] ^ encoded_val);
         }
         /// <summary>
-        /// 
+        /// Recursive Method for dynamically solving a CSP
         /// </summary>
         /// <param name="frontier"></param>
         static bool FC(int frontier = 0)
         {
             // retreive the pointer to the actual Vi
-            var v_pointer = v_p[frontier]; // if v_p not changde it's 1 : 1 map
+            var v_pointer = v_p[frontier]; // if v_p not changed it's 1 : 1 map
             var domain = v_domains[v_pointer];
             int value;
-            //
             if (domain.Count == 1) return true;
             // Try each possible value of the base domain
             for (int i = 0; i < domain.Count; i++)
@@ -332,7 +331,7 @@ namespace Sudoku_solver
                         // Update constraints Cji
                         v_domains[row_i].Remove(value);
                         v_domains[column_i].Remove(value);
-                        v_domains[block_i].Remove(value); // TODO: Set these values back if it backtrack
+                        v_domains[block_i].Remove(value);
                         // Check wether any Domains are now empty
                         if (v_domains[row_i].Count == 0 || v_domains[column_i].Count == 0 || v_domains[block_i].Count == 0)
                         {
@@ -345,9 +344,7 @@ namespace Sudoku_solver
                     // If no Constraint Problems -> Set the value
                     v_domains[v_pointer] = new List<int>() { value };
                     // Expand the next frontier
-                    FC(frontier++);
-                    //
-                    
+                    FC(frontier++);                    
                 }
             }
             return false;
