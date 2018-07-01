@@ -20,8 +20,9 @@ namespace Sudoku_solver
         static Stopwatch watch;
         static FileStream fileOut;
         static int N, sqrtN;
-        delegate void Solve_Logic();
-        static Solve_Logic Insert;
+        delegate bool Solve_Logic(int frontier = 0);
+        static Solve_Logic CSP_solve;
+        static CSP alg_type;
         /// <summary>
         /// Entry Point and startup logic
         /// </summary>
@@ -50,7 +51,7 @@ namespace Sudoku_solver
                 Solve();
             }
 #if DEBUG
-            Debug(DebugPrints.RealValues);
+            Debug(alg_type);
             while (Console.ReadKey().Key != ConsoleKey.Escape) { }
 #endif
         }
@@ -64,8 +65,10 @@ namespace Sudoku_solver
         {
             rand = new Random();
             fileOut = new FileStream($@"../../../{resultFile}.txt", FileMode.Append);
-            //Insert_Init(CSP.FC);
             ImportSudoku(filename);
+            // Solve init may depend on ImportSudoku
+            Solve_Init(CSP.CB_);
+            alg_type = CSP.CB_;
         }
         /// <summary>
         /// Converts a sudoku file to all the approriate datastructures
@@ -148,32 +151,37 @@ namespace Sudoku_solver
             switch (solve_logic)
             {
                 case CSP.FC:
-                    //Insert = FC;
+                    CSP_solve = FC;
                     break;
                 case CSP.FC_:
-
+                    CSP_solve = FC;
                     break;
                 case CSP.CB:
-
+                    CSP_solve = CB;
                     break;
                 case CSP.CB_:
-
+                    HeuristicSort();
+                    CSP_solve = CB;
                     break;
                 default:
                     break;
             }
         }
-        enum CSP { FC, FC_, CB, CB_ };
+        enum CSP { FC = 1, FC_ = 2, CB = 4, CB_ = 8 };
         #endregion
         #region Debug
 #if DEBUG
         /// <summary>
         /// Prints the current state of Sudoku
         /// </summary>
-        static void Debug(DebugPrints to_print)
+        static void Debug(Enum to_print)
         {
+            int print_data = (int)(object)to_print;
+            int test = (int)DebugPrints.BC;
+            int test2 = print_data & test;
+            bool test3 = test2 == test;
             // Sudoku Print
-            if ((to_print & DebugPrints.Sudoku) == DebugPrints.Sudoku)
+            if ((print_data & (int)DebugPrints.FC) > 0)
             {
                 string dashes; string row_print = ""; int pointer;
                 //Returns a string ---\\---//--- equal in length to the sudoku
@@ -195,7 +203,7 @@ namespace Sudoku_solver
                 Console.WriteLine("\n");
             }
 
-            if ((to_print & DebugPrints.RealValues) == DebugPrints.RealValues)
+            if ((print_data & (int)DebugPrints.BC) > 0)
             {
                 string dashes; string row_print = "";
                 //Returns a string ---\\---//--- equal in length to the sudoku
@@ -213,7 +221,7 @@ namespace Sudoku_solver
             }
         }
 
-        enum DebugPrints { Sudoku = 1, RealValues = 2, Constraints = 4};
+        enum DebugPrints { FC = CSP.FC |CSP.FC_, BC = CSP.CB | CSP.CB_};
 #endif
         #endregion
         #region Solve logic
@@ -225,8 +233,7 @@ namespace Sudoku_solver
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
-            //FC();
-            CB_solve(0);
+            CSP_solve();
             watch.Stop();
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
@@ -277,14 +284,14 @@ namespace Sudoku_solver
         /// 
         /// </summary>
         /// <param name="frontier"></param>
-        static void FC(int frontier = 0)
+        static bool FC(int frontier = 0)
         {
             // retreive the pointer to the actual Vi
             var v_pointer = v_p[frontier]; // if v_p not changde it's 1 : 1 map
             var domain = v_domains[v_pointer];
             int value;
             //
-            if (domain.Count == 1) return;
+            if (domain.Count == 1) return true;
             // Try each possible value of the base domain
             for (int i = 0; i < domain.Count; i++)
             {
@@ -314,7 +321,7 @@ namespace Sudoku_solver
                             v_domains[row_i].Add(value);
                             v_domains[column_i].Add(value);
                             v_domains[block_i].Add(value);
-                            return;
+                            return false;
                         }
                     }
                     // If no Constraint Problems -> Set the value
@@ -325,12 +332,13 @@ namespace Sudoku_solver
                     
                 }
             }
+            return false;
         }
 
         /// <summary>
         /// Recursive function that solves the sudoku using CB. Call with realValues and a list of 1..9 for the first time.
         /// </summary>
-        static bool CB_solve(int frontier = 0)
+        static bool CB(int frontier = 0)
         {
             int prev_value, new_frontier;
             // Try all possible values for this node
@@ -361,7 +369,7 @@ namespace Sudoku_solver
                         //Console.WriteLine();
                     }
                     // Enter recursion for next frontier and check wether it returns solved
-                    if (CB_solve(new_frontier))
+                    if (CB(new_frontier))
                     {
                         realValues[frontier] = prev_value;
                         UpdateConstraints(frontier, i);
