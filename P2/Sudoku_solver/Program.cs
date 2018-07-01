@@ -15,7 +15,6 @@ namespace Sudoku_solver
         static ushort[] rows_c, columns_c, blocks_c;
         static List<int>[] v_domains;
         static int[] v_p, realValues;
-        static int[] langs;
         // Additional Globals
         static Random rand;
         static Stopwatch watch;
@@ -35,7 +34,6 @@ namespace Sudoku_solver
             if (Debugger.IsAttached)
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 #endif
-            // TODO: Test what value of S and LoopLimit is optimal
             if (args.Length == 0)
             {
                 Initialize("Test");
@@ -52,7 +50,7 @@ namespace Sudoku_solver
                 Solve();
             }
 #if DEBUG
-            Debug(DebugPrints.Sudoku);
+            Debug(DebugPrints.RealValues);
             while (Console.ReadKey().Key != ConsoleKey.Escape) { }
 #endif
         }
@@ -88,7 +86,6 @@ namespace Sudoku_solver
             v_domains = new List<int>[N * N];
             realValues = new int[N * N];
             v_p = Enumerable.Range(0, N * N).ToArray();
-            langs = new int[N * N];
 
             // Initalize all the domains and locate the fixed vals
             List<int> fixed_vals = new List<int>();
@@ -102,20 +99,19 @@ namespace Sudoku_solver
                     val = ss[j];
                     if (val != '0')
                         fixed_vals.Add(i * N + j);
+                    // Set all domains to maximum
                     v_domains[i * N + j] = Enumerable.Range(1, 9).ToList();
                     realValues[i * N + j] = val - '0';
-                    langs[i * N + j] = 0;
                 }
             }
-            // Initalize all the constraints cij
+            // Initalize all the constraints cij as empty
             for (int c = 0; c < N; c++)
             {
                 rows_c[c] = 0;
                 columns_c[c] = 0;
                 blocks_c[c] = 0;
-                // row / i 
             }
-            // Insert all the fixed_vals
+            // Insert all the fixed_vals, setting the domains and constraints in the process
             foreach (int f in fixed_vals)
                 Insert_Fixed(f, realValues[f]);
         }
@@ -137,11 +133,13 @@ namespace Sudoku_solver
                 column_i = column_start + (j * N);
                 block_i = block_start + ((j / sqrtN) * N) + j % sqrtN;
 
-                // Update constraints Cji
+                // Update Domains Dji
                 v_domains[row_i].Remove(value);
                 v_domains[column_i].Remove(value);
                 v_domains[block_i].Remove(value);
             }
+            // Update Constraitns Cji
+            UpdateConstraints(realSlot, value);
             v_domains[realSlot] = new List<int>() { value };
         }
 
@@ -196,9 +194,26 @@ namespace Sudoku_solver
                 }
                 Console.WriteLine("\n");
             }
+
+            if ((to_print & DebugPrints.RealValues) == DebugPrints.RealValues)
+            {
+                string dashes; string row_print = "";
+                //Returns a string ---\\---//--- equal in length to the sudoku
+                Console.WriteLine($@"{(dashes = new String('-', (2 * N / 3) - 2))}\\{dashes + "-" + (new String('-', (2 * N) % 3))}//{dashes}");
+                for (int i = 0; i < N; i++)
+                {
+                    for (int j = 0; j < N; j++)
+                    {
+                        row_print += (realValues[i * N + j] + " ");
+                    }
+                    Console.WriteLine(row_print);
+                    row_print = "";
+                }
+                Console.WriteLine("\n");
+            }
         }
 
-        enum DebugPrints { Sudoku = 1, Domains = 2, Constraints = 4};
+        enum DebugPrints { Sudoku = 1, RealValues = 2, Constraints = 4};
 #endif
         #endregion
         #region Solve logic
@@ -210,8 +225,8 @@ namespace Sudoku_solver
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
-            FC();
-            CB_solve(new ushort[2] { 1, 2 }, new List<ushort>(), 0);
+            //FC();
+            CB_solve(realValues, new List<int>() {1,2,3,4,5,6,7,8,9 });
             watch.Stop();
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
@@ -229,17 +244,32 @@ namespace Sudoku_solver
             // Encode Value from domain to Binary Check-form
             ushort encodedValue = (ushort)(1 << (realValue - 1));
             // Find the row constraint to check and check wether value already exists
-            var row = rows_c[realSlot / N];
-            if ((row & encodedValue) > 0) return false;
+            var row = realSlot / N;
+            var column = realSlot % N;
+            //
+            var row_c = rows_c[row];
+            if ((row_c & encodedValue) > 0) return false;
             // Do the same for the appropriate column constraint
-            var column = columns_c[realSlot % N];
-            if ((column & encodedValue) > 0) return false;
+            var column_c = columns_c[column];
+            if ((column_c & encodedValue) > 0) return false;
             // Given the column and row index, calculate the corresponding block and check it for a violation to boot
             var block = blocks_c[((row / sqrtN) * sqrtN) + (column / sqrtN)];
             if ((block & encodedValue) > 0) return false;
             // If no constraints were violated return true
             return true;
         }
+
+        static void UpdateConstraints(int realSlot, int realValue)
+        {
+            // Calculate the block index and encode the value to an ushort
+            ushort encoded_val = (ushort)(1 << (realValue - 1));
+            var block_id = (((realSlot / N) / sqrtN) * sqrtN) + ((realSlot % N) / sqrtN);
+            // Update all three constraints
+            rows_c[realSlot / N] = (ushort)(rows_c[realSlot / N] | encoded_val);
+            columns_c[realSlot % N] = (ushort)(columns_c[realSlot % N] | encoded_val);
+            blocks_c[block_id] = (ushort)(blocks_c[block_id] | encoded_val);
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -298,30 +328,48 @@ namespace Sudoku_solver
         /// <summary>
         /// Recursive function that solves the sudoku using CB. Call with realValues and a list of 1..9 for the first time.
         /// </summary>
-        static void CB_solve(ushort[] listOfValues, List<ushort> numbersToTry, int slotIndex = 0) {
+        static bool CB_solve(int[] listOfValues, List<int> numbersToTry, int slotIndex = 0)
+        {
+            bool back_track = false;
+            int current_val = realValues[slotIndex];
+            //
             if (numbersToTry.Count == 0) {
                 Console.WriteLine("Out of numbers. Backtracking.");
-                return;
+                return true;
             }
 
             while (listOfValues[slotIndex] != 0) {
                 slotIndex++;
                 if (slotIndex == listOfValues.Length) {
                     Console.WriteLine("Solved.");
-                    return;
+                    realValues = listOfValues;
+                    return false;
                 }
             }
 
-            ushort num = numbersToTry[0];
+            retry:
+
+            int num = numbersToTry[0];
             if (ConstraintCheck(slotIndex, num)) {
                 listOfValues[slotIndex] = num;
+                UpdateConstraints(slotIndex, num);
                 numbersToTry.RemoveAt(0);
-                CB_solve(listOfValues, new List<ushort>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, slotIndex + 1);
+                back_track = CB_solve(listOfValues, new List<int>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, slotIndex + 1);
             }
             else {
                 numbersToTry.RemoveAt(0);
-                CB_solve(listOfValues, numbersToTry, slotIndex);
+                back_track = CB_solve(listOfValues, numbersToTry, slotIndex);
             }
+
+            if (back_track)
+            {
+                // Set back values
+                UpdateConstraints(slotIndex, current_val);
+
+                if (numbersToTry.Count == 0) return true;
+                else goto retry;
+            }
+            return false;
         }
         #endregion
         #region Research
