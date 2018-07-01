@@ -13,14 +13,15 @@ namespace Sudoku_solver
     {
         // Four different datastructures for representing the Sudoku State
         static ushort[] rows_c, columns_c, blocks_c;
-        static ushort[] v_domains;
-        static int[] v_p;
+        static List<int>[] v_domains;
+        static int[] v_p, realValues;
+        static int[] langs;
         // Additional Globals
         static Random rand;
         static Stopwatch watch;
         static FileStream fileOut;
         static int N, sqrtN;
-        delegate void Insert_Logic(int v_pointer, ushort domain);
+        delegate void Insert_Logic(int v_pointer);
         static Insert_Logic Insert;
         /// <summary>
         /// Entry Point and startup logic
@@ -37,8 +38,8 @@ namespace Sudoku_solver
             // TODO: Test what value of S and LoopLimit is optimal
             if (args.Length == 0)
             {
-                Initialize("TestEasy");
-                Output("TestEasy");
+                Initialize("Test");
+                Output("Test");
                 Solve();
             }
             else
@@ -80,15 +81,17 @@ namespace Sudoku_solver
             string[] rows = System.IO.File.ReadAllLines($@"../../../{filename}.txt");
             // Fill a sudoku based on rows
             N = rows.Length;
-            ushort domain = (ushort)(Math.Pow(2, N) - 1);
             sqrtN = (int)Math.Sqrt(N);
             rows_c = new ushort[N];
             columns_c = new ushort[N];
             blocks_c = new ushort[N];
-            v_domains = new ushort[N * N];
+            v_domains = new List<int>[N * N];
+            realValues = new int[N * N];
+            v_p = Enumerable.Range(0, N * N).ToArray();
+            langs = new int[N * N];
 
             // Initalize all the domains and locate the fixed vals
-            List<Tuple<int, int>> fixed_vals = new List<Tuple<int,int>>();
+            List<int> fixed_vals = new List<int>();
             char[] ss;
             char val;
             for (int i = 0; i < rows.Length; i++)
@@ -98,8 +101,10 @@ namespace Sudoku_solver
                 {
                     val = ss[j];
                     if (val != '0')
-                        fixed_vals.Add(new Tuple<int, int>(i * N + j, val - '0'));
-                    v_domains[i * N + j] = domain;
+                        fixed_vals.Add(i * N + j);
+                    v_domains[i * N + j] = Enumerable.Range(1, 9).ToList();
+                    realValues[i * N + j] = val - '0';
+                    langs[i * N + j] = 0;
                 }
             }
             // Initalize all the constraints cij
@@ -111,8 +116,33 @@ namespace Sudoku_solver
                 // row / i 
             }
             // Insert all the fixed_vals
-            foreach (Tuple<int,int> f in fixed_vals)
-                Insert(f.Item1, (ushort)f.Item2);
+            foreach (int f in fixed_vals)
+                Insert_Fixed(f, realValues[f]);
+        }
+
+        static void HeuristicSort() { v_p.OrderBy(x => v_domains[x].Count); }
+
+        static void Insert_Fixed(int realSlot, int value)
+        {
+            // Get the starts of both the column and row ur Vi is a part of
+            var row_start = realSlot - (realSlot % N);
+            var column_start = realSlot % N;
+            var block_id = (((realSlot / N) / sqrtN) * sqrtN) + ((realSlot % N) / sqrtN);
+            var block_start = (block_id / sqrtN) * (N * sqrtN) + (block_id % sqrtN) * sqrtN;
+            int row_i, column_i, block_i;
+            // Update every other Dj to adhere to the newly assigned value
+            for (int j = 0; j < N; j++)
+            {
+                row_i = row_start + j;
+                column_i = column_start + (j * N);
+                block_i = block_start + ((j / sqrtN) * N) + j % sqrtN;
+
+                // Update constraints Cji
+                v_domains[row_i].Remove(value);
+                v_domains[column_i].Remove(value);
+                v_domains[block_i].Remove(value);
+            }
+            v_domains[realSlot] = new List<int>() { value };
         }
 
         static void Insert_Init(CSP solve_logic)
@@ -147,54 +177,25 @@ namespace Sudoku_solver
             // Sudoku Print
             if ((to_print & DebugPrints.Sudoku) == DebugPrints.Sudoku)
             {
-                string dashes; ushort domain_value; char[] row_print = new char[2 * N - 1]; int pointer;
-                // Fill in the spaces
-                for (int c = 1; c < N; c += 2)
-                    row_print[c] = ' ';
+                string dashes; string row_print = ""; int pointer;
                 //Returns a string ---\\---//--- equal in length to the sudoku
                 Console.WriteLine($@"{(dashes = new String('-', (2 * N / 3) - 2))}\\{dashes + "-" + (new String('-', (2 * N) % 3))}//{dashes}");
-                for (int i = 0; i < N * N; i++)
+                for (int i = 0; i < N; i++)
                 {
                     for (int j = 0; j < N; j++)
                     {
+                        
                         pointer = i * N + j;
-                        domain_value = v_domains[pointer];
-                        // Updated to more efficient method -> https://stackoverflow.com/questions/3160659/innovative-way-for-checking-if-number-has-only-one-on-bit-in-signed-int
-                        // As the Domain !contain 0, no need to check for edge case
-                        if ((domain_value & domain_value - 1) == 0) row_print[pointer] = (char)domain_value;
-                        else row_print[pointer] = '0';
+                        if (v_domains[pointer].Count() > 1)
+                            row_print += "0 ";
+                        else
+                            row_print += $"{v_domains[pointer][0]} ";
                     }
-                    Console.WriteLine();
+                    Console.WriteLine(row_print);
+                    row_print = "";
                 }
                 Console.WriteLine("\n");
             }
-            /*
-            // Blocks print
-            if ((to_print & DebugPrints.Blocks) == DebugPrints.Blocks)
-            {
-                int block_row, row, b_x, b_y, value;
-                // Aesthetic
-                string dashes;
-                Console.WriteLine($@"{(dashes = new String('-', (2 * sudokuRows.Length / 3) - 2))}[[{dashes + "-" + (new String('-', (2 * sudokuRows.Length) % 3))}]]{dashes}");
-                // blocks loop
-                for (int bi = 0; bi < N; bi++)
-                {
-                    block_row = bi / sqrN;
-                    row = bi % sqrN;
-                    // block loop
-                    for (int bj = 0; bj < N; bj++)
-                    {
-                        // Blocks to printable format indexer
-                        b_x = bj / sqrN + block_row * sqrN; b_y = bj % sqrN + row * sqrN;
-                        value = blocks[b_x][b_y];
-                        var xy = BlockToSudokuCoord(b_x, b_y);
-                        if (fixedVals[xy[0], xy[1]]) { Console.ForegroundColor = ConsoleColor.Magenta; Console.Write(value + " "); Console.ForegroundColor = ConsoleColor.Gray; }
-                        else Console.Write(value + " ");
-                    }
-                    Console.WriteLine("");
-                }
-            }
-            */
         }
 
         enum DebugPrints { Sudoku = 1, Domains = 2, Constraints = 4};
@@ -209,7 +210,8 @@ namespace Sudoku_solver
             watch.Stop();
             Console.WriteLine("Initialized(ms): {0}", watch.ElapsedMilliseconds);
             watch = Stopwatch.StartNew();
-            // SOLVE LOGIC
+            FC();
+            CB_solve(new ushort[2] { 1, 2 }, new List<ushort>(), 0);
             watch.Stop();
             Console.WriteLine("ElapsedTime(ms): {0}", watch.ElapsedMilliseconds);
             // Output values:
@@ -222,49 +224,79 @@ namespace Sudoku_solver
         /// <param name="realSlot">The index i coresponding to Vi</param>
         /// <param name="realValue">The value from the Domain to be checked (unencoded)</param>
         /// <returns></returns>
-        static bool ConstraintCheck(int realSlot, ushort realValue)
+        static bool ConstraintCheck(int realSlot, int realValue)
         {
             // Encode Value from domain to Binary Check-form
             ushort encodedValue = (ushort)(1 << (realValue - 1));
             // Find the row constraint to check and check wether value already exists
             var row = rows_c[realSlot / N];
-            if ((row | encodedValue) > 0) return false;
+            if ((row & encodedValue) > 0) return false;
             // Do the same for the appropriate column constraint
             var column = columns_c[realSlot % N];
-            if ((column | encodedValue) > 0) return false;
+            if ((column & encodedValue) > 0) return false;
             // Given the column and row index, calculate the corresponding block and check it for a violation to boot
-            var block = ((row / sqrtN) * sqrtN) + (column / sqrtN);
-            if ((block | encodedValue) > 0) return false;
+            var block = blocks_c[((row / sqrtN) * sqrtN) + (column / sqrtN)];
+            if ((block & encodedValue) > 0) return false;
             // If no constraints were violated return true
             return true;
         }
-        
-        static void FC(int frontier, ushort domain)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="frontier"></param>
+        static void FC(int frontier = 0)
         {
-            var v_pointer = v_p[frontier];
-            ushort value = 0;
-
-            if (ConstraintCheck(v_pointer, value))
+            // retreive the pointer to the actual Vi
+            var v_pointer = v_p[frontier]; // if v_p not changde it's 1 : 1 map
+            var domain = v_domains[v_pointer];
+            int value;
+            //
+            if (domain.Count == 1) return;
+            // Try each possible value of the base domain
+            for (int i = 0; i < domain.Count; i++)
             {
-                var row_start = v_pointer - (v_pointer % N);
-                var column_start = v_pointer % N;
-                var remove_value = ~(1 << (value - 1));
-                int row_i, column_i;
-                for (int i = 0; i < N; i++)
+                langs[v_pointer]++;
+                value = domain[i];
+                // Check wether the value assignment is valid
+                if (ConstraintCheck(v_pointer, value))
                 {
-                    row_i = row_start + i;
-                    column_i = column_start + i;
-                    v_domains[row_i] = (ushort)(v_domains[row_i] & remove_value);
-                    v_domains[column_i] = (ushort)(v_domains[column_i] & remove_value);
-                    if (v_domains[row_i] == 0 || v_domains[column_i] == 0) return;
+                    // Get the starts of both the column and row ur Vi is a part of
+                    var row_start = v_pointer - (v_pointer % N);
+                    var column_start = v_pointer % N;
+                    var block_id = (((v_pointer / N) / sqrtN) * sqrtN) + ((v_pointer % N) / sqrtN);
+                    var block_start = (block_id / sqrtN) * (N * sqrtN) + (block_id - (block_id % sqrtN));
+                    int row_i, column_i, block_i;
+                    // Update every other Dj to adhere to the newly assigned value
+                    for (int j = 0; j < N; j++)
+                    {
+                        row_i = row_start + j;
+                        column_i = column_start + (j * N);
+                        block_i = block_start + ((j / sqrtN) * N) + j;
+                        // Update constraints Cji
+                        v_domains[row_i].Remove(value);
+                        v_domains[column_i].Remove(value);
+                        v_domains[block_i].Remove(value); // TODO: Set these values back if it backtrack
+                        // Check wether any Domains are now empty
+                        if (v_domains[row_i].Count == 0 || v_domains[column_i].Count == 0 || v_domains[block_i].Count == 0)
+                        {
+                            v_domains[row_i].Add(value);
+                            v_domains[column_i].Add(value);
+                            v_domains[block_i].Add(value);
+                            return;
+                        }
+                    }
+                    // If no Constraint Problems -> Set the value
+                    v_domains[v_pointer] = new List<int>() { value };
+                    // Expand the next frontier
+                    FC(frontier++);
+                    //
+                    
                 }
-                v_domains[v_pointer] = value;
             }
-            // vp_++;
         }
 
         /// <summary>
-        /// Recursive function that solves the sudoku using CB. Call with [a list of all starting values] and a list of 1..9 for the first time.
+        /// Recursive function that solves the sudoku using CB. Call with realValues and a list of 1..9 for the first time.
         /// </summary>
         static void CB_solve(ushort[] listOfValues, List<ushort> numbersToTry, int slotIndex = 0) {
             if (numbersToTry.Count == 0) {
@@ -281,7 +313,7 @@ namespace Sudoku_solver
             }
 
             ushort num = numbersToTry[0];
-            if (ConstraintCheck(listOfValues, slotIndex, num)) {
+            if (ConstraintCheck(slotIndex, num)) {
                 listOfValues[slotIndex] = num;
                 numbersToTry.RemoveAt(0);
                 CB_solve(listOfValues, new List<ushort>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, slotIndex + 1);
@@ -290,36 +322,6 @@ namespace Sudoku_solver
                 numbersToTry.RemoveAt(0);
                 CB_solve(listOfValues, numbersToTry, slotIndex);
             }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ind_a"></param>
-        /// <param name="ind_b"></param>
-        /// <param name="b_index"></param>
-        static bool Swap(int ind_a, int ind_b, int b_index)
-        {
-            // Get Sudoku Coor
-            var a_xy = BlockToSudokuCoord(b_index, ind_a);
-            var b_xy = BlockToSudokuCoord(b_index, ind_b);
-            if (!(fixedVals[a_xy[0], a_xy[1]] | fixedVals[b_xy[0], b_xy[1]]))
-            {
-                // Store value a and swap
-                var temp = blocks[b_index][ind_a];
-                blocks[b_index][ind_a] = blocks[b_index][ind_b];
-                blocks[b_index][ind_b] = temp;
-                // Get Sudoku Coor
-                // Swap Rows: indexed  by y(1) -> x(0)
-                sudokuRows[a_xy[1]][a_xy[0]] = sudokuRows[b_xy[1]][b_xy[0]];
-                sudokuRows[b_xy[1]][b_xy[0]] = temp;
-                // Swap Columns: indexed by x(0) -> y(1)
-                sudokuColumns[a_xy[0]][a_xy[1]] = sudokuColumns[b_xy[0]][b_xy[1]];
-                sudokuColumns[b_xy[0]][b_xy[1]] = temp;
-
-                return true;
-            }
-            return false;
         }
         #endregion
         #region Research
