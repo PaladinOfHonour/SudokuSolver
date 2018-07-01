@@ -40,8 +40,8 @@ namespace Sudoku_solver
 #endif
             if (args.Length == 0)
             {
-                Initialize("Test", csp_type: CSP.CB_);
-                Output("Test");
+                Initialize("11", csp_type: CSP.CB_);
+                Output("11");
                 Solve();
             }
             else
@@ -49,14 +49,15 @@ namespace Sudoku_solver
                 var args_int = new int[args.Length - 1];
                 for (int i = 0; i < args.Length - 1; i++) args_int[i] = Int32.Parse(args[i]);
                 string puzzle = args[args.Length - 1];
-                Output(puzzle);
+                Console.WriteLine("/////////////////" + puzzle);
                 Initialize(puzzle, csp_type: (CSP)args_int[0]);
+                Output(puzzle);
                 Solve();
             }
 #if DEBUG
             Console.WriteLine(recursionCount);
             Debug(alg_type);
-            while (Console.ReadKey().Key != ConsoleKey.Escape) { }
+            //while (Console.ReadKey().Key != ConsoleKey.Escape) { }
 #endif
         }
         // Program Logic
@@ -65,7 +66,7 @@ namespace Sudoku_solver
         /// Contains all initialisation logic
         /// </summary>
         /// <param name="filename"></param>
-        static void Initialize(string filename = "Test", string resultFile = "Result", CSP csp_type = CSP.CB)
+        static void Initialize(string filename = "11", string resultFile = "Result", CSP csp_type = CSP.CB)
         {
             rand = new Random();
             fileOut = new FileStream($@"../../../{resultFile}.txt", FileMode.Append);
@@ -78,7 +79,7 @@ namespace Sudoku_solver
         /// Converts a sudoku file to all the approriate datastructures
         /// </summary>
         /// <param name="filename"></param>
-        static void ImportSudoku(string filename = "Test")
+        static void ImportSudoku(string filename = "11")
         {
             // Direct Path to Old location: ($@"E:\University\Computational_Intelligence\Sudoku_solver\{filename}.txt")
             // Generalized Path to location: System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\..\\"), $"{filename}.txt"))
@@ -202,8 +203,9 @@ namespace Sudoku_solver
                     {
                         
                         pointer = i * N + j;
-                        if (v_domains[pointer].Count() > 1)
+                        if (v_domains[pointer].Count() > 1) {
                             row_print += "0 ";
+                        }
                         else
                             row_print += $"{v_domains[pointer][0]} ";
                     }
