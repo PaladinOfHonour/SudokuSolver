@@ -40,8 +40,8 @@ namespace Sudoku_solver
 #endif
             if (args.Length == 0)
             {
-                Initialize("Test", csp_type: CSP.CB_);
-                Output("Test");
+                Initialize("9", csp_type: CSP.CB_);
+                Output("9");
                 Solve();
             }
             else
@@ -127,7 +127,7 @@ namespace Sudoku_solver
                 Insert_Fixed(f, realValues[f]);
         }
         /// <summary>
-        /// 
+        /// Inserts the fixed values and updates the constraints and domain accordingy
         /// </summary>
         /// <param name="realSlot"></param>
         /// <param name="value"></param>
@@ -155,7 +155,10 @@ namespace Sudoku_solver
             UpdateConstraints(realSlot, value);
             v_domains[realSlot] = new List<int>() { value };
         }
-
+        /// <summary>
+        /// Sets what algorithm to solve the CSP with
+        /// </summary>
+        /// <param name="solve_logic"></param>
         static void Solve_Init(CSP solve_logic)
         {
             switch (solve_logic)
@@ -252,11 +255,11 @@ namespace Sudoku_solver
             OutNewLine();
         }
         /// <summary>
-        /// 
+        /// Sorts the v_p list on Domain size of the v_p&
         /// </summary>
         static void HeuristicSort() { v_p = v_p.OrderBy(x => v_domains[x].Count).ToArray(); }
         /// <summary>
-        /// 
+        /// Check wether a certain value assignment is valid
         /// </summary>
         /// <param name="realSlot">The index i coresponding to Vi</param>
         /// <param name="realValue">The value from the Domain to be checked (unencoded)</param>
@@ -268,7 +271,7 @@ namespace Sudoku_solver
             // Find the row constraint to check and check wether value already exists
             var row = realSlot / N;
             var column = realSlot % N;
-            //
+            //  Check if the value is already in the appropriate road
             var row_c = rows_c[row];
             if ((row_c & encodedValue) > 0) return false;
             // Do the same for the appropriate column constraint
@@ -297,16 +300,16 @@ namespace Sudoku_solver
             blocks_c[block_id] = (ushort)(blocks_c[block_id] ^ encoded_val);
         }
         /// <summary>
-        /// 
+        /// Recursive function that dynamically tries to solve a CSP
         /// </summary>
         /// <param name="frontier"></param>
         static bool FC(int frontier = 0)
         {
+            recursionCount++;
             // retreive the pointer to the actual Vi
             var v_pointer = v_p[frontier]; // if v_p not changde it's 1 : 1 map
             var domain = v_domains[v_pointer];
             int value;
-            //
             if (domain.Count == 1) return true;
             // Try each possible value of the base domain
             for (int i = 0; i < domain.Count; i++)
@@ -330,7 +333,7 @@ namespace Sudoku_solver
                         // Update constraints Cji
                         v_domains[row_i].Remove(value);
                         v_domains[column_i].Remove(value);
-                        v_domains[block_i].Remove(value); // TODO: Set these values back if it backtrack
+                        v_domains[block_i].Remove(value);
                         // Check wether any Domains are now empty
                         if (v_domains[row_i].Count == 0 || v_domains[column_i].Count == 0 || v_domains[block_i].Count == 0)
                         {
@@ -344,20 +347,16 @@ namespace Sudoku_solver
                     v_domains[v_pointer] = new List<int>() { value };
                     // Expand the next frontier
                     FC(frontier++);
-                    //
-                    
                 }
             }
             return false;
         }
-
         /// <summary>
         /// Recursive function that solves the sudoku using CB. Call with realValues and a list of 1..9 for the first time.
         /// </summary>
         static bool CB(int frontier = 0)
         {
             recursionCount++;
-            //
             int pointer = v_p[frontier];
             int prev_value, new_frontier, new_pointer;
             // Try all possible values for this node
