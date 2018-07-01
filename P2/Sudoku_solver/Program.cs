@@ -23,6 +23,8 @@ namespace Sudoku_solver
         delegate bool Solve_Logic(int frontier = 0);
         static Solve_Logic CSP_solve;
         static CSP alg_type;
+
+        static int recursionCount = 0;
         /// <summary>
         /// Entry Point and startup logic
         /// </summary>
@@ -37,8 +39,8 @@ namespace Sudoku_solver
 #endif
             if (args.Length == 0)
             {
-                Initialize("4");
-                Output("4");
+                Initialize("2");
+                Output("2");
                 Solve();
             }
             else
@@ -46,8 +48,8 @@ namespace Sudoku_solver
                 var args_int = new int[args.Length - 1];
                 for (int i = 0; i < args.Length - 1; i++) args_int[i] = Int32.Parse(args[i]);
                 string puzzle = args[args.Length - 1];
-                Initialize(puzzle);
-                Output(puzzle);
+                Initialize(puzzle, csp_type: (CSP)args_int[0]);
+                Output(recursionCount);
                 Solve();
             }
 #if DEBUG
@@ -61,14 +63,14 @@ namespace Sudoku_solver
         /// Contains all initialisation logic
         /// </summary>
         /// <param name="filename"></param>
-        static void Initialize(string filename = "Test", string resultFile = "Result")
+        static void Initialize(string filename = "Test", string resultFile = "Result", CSP csp_type = CSP.CB)
         {
             rand = new Random();
             fileOut = new FileStream($@"../../../{resultFile}.txt", FileMode.Append);
             ImportSudoku(filename);
             // Solve init may depend on ImportSudoku
-            Solve_Init(CSP.CB_);
-            alg_type = CSP.CB_;
+            Solve_Init(csp_type);
+            alg_type = csp_type;
         }
         /// <summary>
         /// Converts a sudoku file to all the approriate datastructures
@@ -118,9 +120,11 @@ namespace Sudoku_solver
             foreach (int f in fixed_vals)
                 Insert_Fixed(f, realValues[f]);
         }
-
-        static void HeuristicSort() { v_p.OrderBy(x => v_domains[x].Count); }
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="realSlot"></param>
+        /// <param name="value"></param>
         static void Insert_Fixed(int realSlot, int value)
         {
             // Get the starts of both the column and row ur Vi is a part of
@@ -221,7 +225,7 @@ namespace Sudoku_solver
             }
         }
 
-        enum DebugPrints { FC = CSP.FC |CSP.FC_, BC = CSP.CB | CSP.CB_};
+        enum DebugPrints { FC = CSP.FC |CSP.FC_ | Domains, BC = CSP.CB | CSP.CB_ | Reals, Domains = 64, Reals = 128};
 #endif
         #endregion
         #region Solve logic
@@ -240,6 +244,10 @@ namespace Sudoku_solver
             Output(watch.ElapsedMilliseconds);
             OutNewLine();
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        static void HeuristicSort() { v_p.OrderBy(x => v_domains[x].Count); }
         /// <summary>
         /// 
         /// </summary>
@@ -266,7 +274,8 @@ namespace Sudoku_solver
             return true;
         }
         /// <summary>
-        /// XOR Update
+        /// Updates the constraints by XOR-ing with the value;
+        /// ergo to reset previous update, repeat same call
         /// </summary>
         /// <param name="realSlot"></param>
         /// <param name="realValue"></param>
@@ -340,20 +349,33 @@ namespace Sudoku_solver
         /// </summary>
         static bool CB(int frontier = 0)
         {
-            int prev_value, new_frontier;
+            if (recursionCount > 100)
+            {
+                Debug(CSP.CB);
+            }
+            recursionCount++;
+            //
+            int pointer = v_p[frontier];
+            int prev_value, new_frontier, new_pointer;
             // Try all possible values for this node
             for (int i = 1; i <= N; i++)
             {
-                // Check wether the value adheres to the constraints
-                if (ConstraintCheck(frontier, i))
+
+                if (pointer == 0)
                 {
-                    UpdateConstraints(frontier, i);
+                    Console.WriteLine();
+                }
+
+                // Check wether the value adheres to the constraints
+                if (ConstraintCheck(pointer, i))
+                {
+                    UpdateConstraints(pointer, i);
                     // store the old value for back tracking
-                    prev_value = realValues[frontier];
-                    realValues[frontier] = i;
+                    prev_value = realValues[pointer];
+                    realValues[pointer] = i;
                     // Find the next frontier
                     new_frontier = frontier;
-                    while (realValues[new_frontier] != 0)
+                    while (realValues[v_p[new_frontier]] != 0)
                     {
                         new_frontier++;
                         if (new_frontier == realValues.Length)
@@ -364,15 +386,12 @@ namespace Sudoku_solver
                             // false means no backtracking
                         }
                     }
-                    if (new_frontier == 8)
-                    {
-                        //Console.WriteLine();
-                    }
+                    new_pointer = v_p[new_frontier];
                     // Enter recursion for next frontier and check wether it returns solved
-                    if (CB(new_frontier))
+                    if (CB(new_pointer))
                     {
-                        realValues[frontier] = prev_value;
-                        UpdateConstraints(frontier, i);
+                        realValues[pointer] = prev_value;
+                        UpdateConstraints(pointer, i);
                         continue;
                         // try the next value after resetting the state
                     }
